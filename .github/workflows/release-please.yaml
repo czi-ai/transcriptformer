@@ -10,7 +10,7 @@ concurrency:
 
 jobs:
   release-please:
-    runs-on: ARM64
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
