@@ -1,0 +1,70 @@
+name: Publish to PyPi
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # TODO: Once the repo is public, uncomment the following and remove the test token
+    # environment: pypi
+    # permissions:
+    #   id-token: write # to authenticate as Trusted Publisher to pypi.org
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get the version
+        id: get_version
+        run: |
+          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Display version being published
+        run: |
+          echo "Publishing version: ${{ steps.get_version.outputs.VERSION }}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: 'pyproject.toml'
+
+      - name: Cache python dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-build-${{ hashFiles('uv.lock') }}
+          restore-keys: ${{ runner.os }}-build-
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install dependencies
+        run: uv pip install --system --cache-dir ~/.cache/uv -e '.[build]'
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # TODO: Once the repo is public, switch to publishing via Trusted Publisher and remove the test token
+          password: ${{ secrets.TEST_PYPI_CZI_API_TOKEN }}
+          repository-url: https://test.pypi.org/legacy/
+
+      - name: Confirm publish to Test PyPI
+        uses: nick-fields/retry@v3
+        with:
+          max_attempts: 15
+          timeout_seconds: 30
+          polling_interval_seconds: 5
+          command: pip index versions --index-url https://test.pypi.org/simple/ transcriptformer | grep "Available.*${{ steps.get_version.outputs.VERSION }}"
+
+      - name: Install and Test Package from Test PyPI
+        # Add PyPi index to the pip install command so that any dependencies not on TestPyPI are installed from PyPI
+        # For example, anndata >= 0.9.0 is not on TestPyPI, so it is installed from PyPI
+        run: |
+          pip install --no-cache-dir -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple transcriptformer
+          python -c "import transcriptformer"
+          pip freeze | grep "transcriptformer==${{ steps.get_version.outputs.VERSION }}"
