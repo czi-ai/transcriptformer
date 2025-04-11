@@ -14,6 +14,6 @@ concurrency:
   cancel-in-progress: true
 jobs:
   conventional_commit_title:
-    runs-on: ARM64
+    runs-on: ubuntu-latest
     steps:
       - uses: chanzuckerberg/github-actions/.github/actions/conventional-commits@v5.5.1
