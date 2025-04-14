@@ -1,20 +1,18 @@
-import scanpy as sc
-import anndata as ad
-from cellxgene_census import download_source_h5ad
 import os
-from typing import Any, Literal, Tuple, Union
+from typing import Any, Literal
+
+import anndata as ad
 from scanpy.readwrite import _check_datafile_present_and_download
 
-PathLike = Union[os.PathLike, str]
+PathLike = os.PathLike | str
+
 
 def lymphnode_tsv2(
     path: PathLike = "~/.cache/transcriptformer/lymphnode_tsv2.h5ad",
     force_download: bool = False,
     **kwargs: Any,
 ) -> ad.AnnData:
-    """
-    Lymph node dataset from Tabula Sapiens v2.
-    """
+    """Lymph node dataset from Tabula Sapiens v2."""
     return _load_dataset_from_url(
         path,
         file_type="h5ad",
@@ -30,7 +28,7 @@ def _load_dataset_from_url(
     file_type: Literal["h5ad"],
     *,
     backup_url: str,
-    expected_shape: Tuple[int, int],
+    expected_shape: tuple[int, int],
     force_download: bool = False,
     **kwargs: Any,
 ) -> ad.AnnData:
