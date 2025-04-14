@@ -32,20 +32,20 @@ dependencies = [
 ]
 
 optional-dependencies.build = [
-  "build>=1.2.2.post1",
-  "setuptools>=78.1",
+  "hatch>=1.14.1",
   "twine>=6.1",
   "wheel>=0.45.1",
 ]
+
 optional-dependencies.dev = [
   "pytest==8",
 ]
 
-[tool.hatch.build.targets.wheel]
-packages = [ "src" ]
-
 urls."Bug Tracker" = "https://github.com/czi-ai/transcriptformer/issues"
 urls."Homepage" = "https://github.com/czi-ai/transcriptformer"
+
+[tool.hatch.build.targets.wheel]
+packages = [ "src/transcriptformer" ]
 
 [tool.ruff]
 line-length = 120
