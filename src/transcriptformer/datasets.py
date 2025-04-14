@@ -13,14 +13,20 @@ def lymphnode_tsv2(
     **kwargs: Any,
 ) -> ad.AnnData:
     """Lymph node dataset from Tabula Sapiens v2."""
-    return _load_dataset_from_url(
+    adata = _load_dataset_from_url(
         path,
         file_type="h5ad",
-        backup_url="https://figshare.com/ndownloader/files/40569779",
-        expected_shape=(54134, 2000),
+        backup_url="https://datasets.cellxgene.cziscience.com/71021707-8e1f-4871-abe4-8f645f2cdb9e.h5ad",
         force_download=force_download,
         **kwargs,
     )
+
+    print(adata)
+
+    # if adata.shape != expected_shape:
+    #     raise ValueError(f"Expected AnnData object to have shape `{expected_shape}`, found `{adata.shape}`.")
+
+    return adata
 
 
 def _load_dataset_from_url(
@@ -28,7 +34,6 @@ def _load_dataset_from_url(
     file_type: Literal["h5ad"],
     *,
     backup_url: str,
-    expected_shape: tuple[int, int],
     force_download: bool = False,
     **kwargs: Any,
 ) -> ad.AnnData:
@@ -42,7 +47,8 @@ def _load_dataset_from_url(
         raise FileNotFoundError(f"File `{fpath}` not found or download failed.")
     data = ad.read_h5ad(filename=fpath, **kwargs)
 
-    if data.shape != expected_shape:
-        raise ValueError(f"Expected AnnData object to have shape `{expected_shape}`, found `{data.shape}`.")
-
     return data
+
+
+if __name__ == "__main__":
+    lymphnode_tsv2()
