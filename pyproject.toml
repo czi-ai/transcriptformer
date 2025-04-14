@@ -17,6 +17,7 @@ classifiers = [
 ]
 dependencies = [
   "anndata>=0.10.5",
+  "cellxgene-census>=0.1.17",
   "h5py>=3.10",
   "hydra-core>=1.3",
   "numpy>=1.26",
@@ -29,10 +30,10 @@ dependencies = [
   "scipy>=1.13",
   "timeout-decorator>=0.5",
   "torch>=2.5,<2.6",
-  "cellxgene-census>=0.1.17",
 ]
 
 optional-dependencies.dev = [
+  "pre-commit",
   "pytest==8",
 ]
 urls."Bug Tracker" = "https://github.com/czi-ai/transcriptformer/issues"
