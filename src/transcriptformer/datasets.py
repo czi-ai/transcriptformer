@@ -7,12 +7,24 @@ from scanpy.readwrite import _check_datafile_present_and_download
 PathLike = os.PathLike | str
 
 
-def lymphnode_tsv2(
+def lymphnode_tabula_sapiens(
     path: PathLike = "~/.cache/transcriptformer/lymphnode_tsv2.h5ad",
     force_download: bool = False,
+    version: Literal["v1", "v2"] = "v2",
     **kwargs: Any,
 ) -> ad.AnnData:
-    """Lymph node dataset from Tabula Sapiens v2."""
+    """
+    Lymph node dataset from Tabula Sapiens.
+
+    Args:
+        path: Path to save the dataset.
+        force_download: Whether to force download the dataset.
+        version: Version of the dataset to load. `v1` is in-distribution for Transcriptformer, `v2` is out-of-distribution.
+
+    Returns
+    -------
+        AnnData object.
+    """
     adata = _load_dataset_from_url(
         path,
         file_type="h5ad",
@@ -21,10 +33,7 @@ def lymphnode_tsv2(
         **kwargs,
     )
 
-    print(adata)
-
-    # if adata.shape != expected_shape:
-    #     raise ValueError(f"Expected AnnData object to have shape `{expected_shape}`, found `{adata.shape}`.")
+    adata = filter_anndata_by_tissue_and_version(adata, version=version)
 
     return adata
 
@@ -50,5 +59,26 @@ def _load_dataset_from_url(
     return data
 
 
+def filter_anndata_by_tissue_and_version(
+    adata: ad.AnnData,
+    version: Literal["v1", "v2"],
+    min_gene_counts: int = 10,
+) -> ad.AnnData:
+    if version == "v1":
+        mask = adata.obs["donor_id"].str.split("TSP").str[-1].astype(int) < 16
+    elif version == "v2":
+        mask = adata.obs["donor_id"].str.split("TSP").str[-1].astype(int) > 16
+    else:
+        raise ValueError(f"Invalid version: {version}. Must be one of ['v1', 'v2']")
+
+    adata_filtered = adata[mask].copy()
+
+    gene_sums = adata_filtered.X.sum(axis=0)
+    genes_to_keep = gene_sums >= min_gene_counts
+    adata_filtered = adata_filtered[:, genes_to_keep].copy()
+
+    return adata_filtered
+
+
 if __name__ == "__main__":
-    lymphnode_tsv2()
+    lymphnode_tabula_sapiens()
