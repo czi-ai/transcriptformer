@@ -29,6 +29,7 @@ dependencies = [
   "scipy>=1.13",
   "timeout-decorator>=0.5",
   "torch>=2.5,<2.6",
+  "cellxgene-census>=0.1.17",
 ]
 
 optional-dependencies.dev = [
