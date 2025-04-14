@@ -38,6 +38,68 @@ def lymphnode_tabula_sapiens(
     return adata
 
 
+def heart_tabula_sapiens(
+    path: PathLike = "~/.cache/transcriptformer/heart_tsv2.h5ad",
+    force_download: bool = False,
+    version: Literal["v1", "v2"] = "v2",
+    **kwargs: Any,
+) -> ad.AnnData:
+    """
+    Heart dataset from Tabula Sapiens.
+
+    Args:
+        path: Path to save the dataset.
+        force_download: Whether to force download the dataset.
+        version: Version of the dataset to load. `v1` is in-distribution for Transcriptformer, `v2` is out-of-distribution.
+
+    Returns
+    -------
+        AnnData object.
+    """
+    adata = _load_dataset_from_url(
+        path,
+        file_type="h5ad",
+        backup_url="https://datasets.cellxgene.cziscience.com/97516b79-8d08-46a6-b329-5d0a25b0be98.h5ad",
+        force_download=force_download,
+        **kwargs,
+    )
+
+    adata = filter_anndata_by_tissue_and_version(adata, version=version)
+
+    return adata
+
+
+def ear_tabula_sapiens(
+    path: PathLike = "~/.cache/transcriptformer/ear_tsv2.h5ad",
+    force_download: bool = False,
+    version: Literal["v1", "v2"] = "v2",
+    **kwargs: Any,
+) -> ad.AnnData:
+    """
+    Ear dataset from Tabula Sapiens.
+
+    Args:
+        path: Path to save the dataset.
+        force_download: Whether to force download the dataset.
+        version: Version of the dataset to load. `v1` is in-distribution for Transcriptformer, `v2` is out-of-distribution.
+
+    Returns
+    -------
+        AnnData object.
+    """
+    adata = _load_dataset_from_url(
+        path,
+        file_type="h5ad",
+        backup_url="https://datasets.cellxgene.cziscience.com/ffa57bc0-78ca-4aa4-be6b-adc40b2f5214.h5ad",
+        force_download=force_download,
+        **kwargs,
+    )
+
+    adata = filter_anndata_by_tissue_and_version(adata, version=version)
+
+    return adata
+
+
 def _load_dataset_from_url(
     fpath: PathLike,
     file_type: Literal["h5ad"],
