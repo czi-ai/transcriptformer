@@ -56,7 +56,7 @@ def tabula_sapiens(
     Load tissue dataset from Tabula Sapiens.
 
     Args:
-        tissue: Tissue name ('lymphnode', 'heart', or 'ear')
+        tissue: Tissue name e.g. ('lymphnode', 'heart', or 'ear')
         path: Path to save the dataset. If None, uses default path.
         force_download: Whether to force download the dataset.
         version: Version of the dataset. 'v1' is in-distribution for Transcriptformer,
