@@ -47,7 +47,7 @@ def tabula_sapiens(
         "uterus",
         "vasculature",
     ],
-    path: PathLike = None,
+    path: PathLike | None = None,
     force_download: bool = False,
     version: Literal["v1", "v2"] = "v2",
     **kwargs: Any,
@@ -104,7 +104,7 @@ def tabula_sapiens(
     }
 
     if path is None:
-        path = f"~/.cache/transcriptformer/{tissue}_tsv2.h5ad"
+        path = f"~/.cache/transcriptformer/{tissue}_{version}.h5ad"
 
     adata = _load_dataset_from_url(
         path,
