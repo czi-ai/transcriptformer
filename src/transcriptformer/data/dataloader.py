@@ -1,9 +1,9 @@
 import logging
 import os
 import random
+
 import anndata
 import numpy as np
-import pandas as pd
 import scanpy as sc
 import torch
 from scipy.sparse import csc_matrix, csr_matrix
