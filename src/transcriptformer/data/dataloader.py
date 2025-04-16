@@ -47,6 +47,8 @@ def apply_filters(
     min_expressed_genes,
 ):
     """Apply filters to the data."""
+    print(vocab)
+    print(gene_names)
     if filter_to_vocab:
         filter_idx = [i for i, name in enumerate(gene_names) if name in vocab]
         X = X[:, filter_idx]
@@ -232,6 +234,7 @@ class AnnDataset(Dataset):
             return None
 
         gene_names, success = load_gene_features(adata, self.gene_col_name)
+        print(gene_names)
         if not success:
             logging.error(f"Failed to load gene features from {file_path}")
             return None
@@ -253,6 +256,8 @@ class AnnDataset(Dataset):
         if X is None:
             logging.warning(f"Data was filtered out completely for {file_path}")
             return None
+        
+        print(X.shape, obs.shape)
 
         batch = process_batch(
             X,
