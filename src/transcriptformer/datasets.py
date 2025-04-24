@@ -202,7 +202,12 @@ def download_all_embeddings(
         s3_client.download_file(bucket_name, backup_url, fpath)
         # untar the file
         with tarfile.open(fpath, "r:gz") as tar:
-            tar.extractall(os.path.dirname(fpath.replace(".tar.gz", "")))
+            extraction_dir = os.path.dirname(fpath.replace(".tar.gz", ""))
+            for member in tar.getmembers():
+                member_path = os.path.join(extraction_dir, member.name)
+                if not member_path.startswith(os.path.abspath(extraction_dir)):
+                    raise ValueError(f"Illegal tar archive entry: {member.name}")
+            tar.extractall(extraction_dir)
 
 
 def _load_dataset_from_url(
