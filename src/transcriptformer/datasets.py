@@ -120,7 +120,14 @@ def tabula_sapiens(
 def bgee_testis_evolution(
     organism: Literal[
         "marmoset",
-        "rhesus",
+        "rhesus_macaque",
+        "human",
+        "chimpanzee",
+        "platypus",
+        "mouse",
+        "opossum",
+        "gorilla",
+        "chicken",
     ],
     path: PathLike | None = None,
     force_download: bool = False,
@@ -163,6 +170,39 @@ def bgee_testis_evolution(
     )
 
     return adata
+
+
+def download_all_embeddings(
+    path: PathLike | None = None,
+    **kwargs: Any,
+) -> None:
+    """
+    Download all embeddings used in the Transcriptformer paper.
+
+    Args:
+        path: Path to save the dataset. If None, uses default path.
+        force_download: Whether to force download the dataset.
+    """
+    import tarfile
+
+    import boto3
+    from botocore import UNSIGNED
+    from botocore.config import Config
+
+    if path is None:
+        path = "~/.cache/transcriptformer/all_embeddings.tar.gz"
+
+    bucket_name = "czi-transcriptformer"
+    backup_url = "weights/all_embeddings.tar.gz"
+    s3_client = boto3.client("s3", config=Config(signature_version=UNSIGNED))
+    fpath = os.path.expanduser(path)
+    if not os.path.exists(fpath):
+        os.makedirs(os.path.dirname(fpath), exist_ok=True)
+        # Download the file
+        s3_client.download_file(bucket_name, backup_url, fpath)
+        # untar the file
+        with tarfile.open(fpath, "r:gz") as tar:
+            tar.extractall(os.path.dirname(fpath.replace(".tar.gz", "")))
 
 
 def _load_dataset_from_url(
@@ -217,3 +257,7 @@ def filter_anndata_by_tissue_and_version(
     adata_filtered = adata_filtered[:, genes_to_keep].copy()
 
     return adata_filtered
+
+
+if __name__ == "__main__":
+    download_all_embeddings()
