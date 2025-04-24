@@ -140,7 +140,14 @@ def bgee_evolution(
     """
     urls = {
         "marmoset": "datasets/v1/evo_distance/testis/Callithrix_jacchus_ERP132588_droplet_based_curated.h5ad",
+        "chicken": "datasets/v1/evo_distance/testis/Gallus_gallus_ERP132576_droplet_based_curated.h5ad",
+        "gorilla": "datasets/v1/evo_distance/testis/Gorilla_gorilla_ERP132581_droplet_based_curated.h5ad",
+        "human": "datasets/v1/evo_distance/testis/Homo_sapiens_ERP132584_droplet_based_curated.h5ad",
         "rhesus_macaque": "datasets/v1/evo_distance/testis/Macaca_mulatta_ERP132582_droplet_based_curated.h5ad",
+        "opossum": "datasets/v1/evo_distance/testis/Monodelphis_domestica_ERP132579_droplet_based_curated.h5ad",
+        "mouse": "datasets/v1/evo_distance/testis/Mus_musculus_ERP132577_droplet_based_curated.h5ad",
+        "platypus": "datasets/v1/evo_distance/testis/Ornithorhynchus_anatinus_ERP132578_droplet_based_curated.h5ad",
+        "chimpanzee": "datasets/v1/evo_distance/testis/Pan_troglodytes_ERP139683_droplet_based_curated.h5ad",
     }
 
     if path is None:
