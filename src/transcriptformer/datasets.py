@@ -117,7 +117,7 @@ def tabula_sapiens(
     return filter_anndata_by_tissue_and_version(adata, version=version)
 
 
-def bgee_evolution(
+def bgee_testis_evolution(
     organism: Literal[
         "marmoset",
         "rhesus",
@@ -127,10 +127,10 @@ def bgee_evolution(
     **kwargs: Any,
 ) -> ad.AnnData:
     """
-    Load tissue dataset from Bgee Evolution.
+    Load testis tissue from an organism dataset from Bgee Evolution.
 
     Args:
-        organism: Tissue name e.g. ('marmoset', 'rhesus_macaque')
+        organism: Organism name e.g. ('marmoset', 'rhesus_macaque').
         path: Path to save the dataset. If None, uses default path.
         force_download: Whether to force download the dataset.
 
