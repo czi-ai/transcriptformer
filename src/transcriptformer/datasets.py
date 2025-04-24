@@ -117,11 +117,53 @@ def tabula_sapiens(
     return filter_anndata_by_tissue_and_version(adata, version=version)
 
 
+def bgee_evolution(
+    organism: Literal[
+        "marmoset",
+        "rhesus",
+    ],
+    path: PathLike | None = None,
+    force_download: bool = False,
+    **kwargs: Any,
+) -> ad.AnnData:
+    """
+    Load tissue dataset from Bgee Evolution.
+
+    Args:
+        organism: Tissue name e.g. ('marmoset', 'rhesus_macaque')
+        path: Path to save the dataset. If None, uses default path.
+        force_download: Whether to force download the dataset.
+
+    Returns
+    -------
+        AnnData object.
+    """
+    urls = {
+        "marmoset": "datasets/v1/evo_distance/testis/Callithrix_jacchus_ERP132588_droplet_based_curated.h5ad",
+        "rhesus_macaque": "datasets/v1/evo_distance/testis/Macaca_mulatta_ERP132582_droplet_based_curated.h5ad",
+    }
+
+    if path is None:
+        path = f"~/.cache/transcriptformer/{organism}.h5ad"
+
+    adata = _load_dataset_from_url(
+        path,
+        file_type="h5ad",
+        backup_url=urls[organism],
+        bucket_name="cz-benchmarks-data",
+        force_download=force_download,
+        **kwargs,
+    )
+
+    return adata
+
+
 def _load_dataset_from_url(
     fpath: PathLike,
     file_type: Literal["h5ad"],
     *,
     backup_url: str,
+    bucket_name: str | None = None,
     force_download: bool = False,
     **kwargs: Any,
 ) -> ad.AnnData:
@@ -131,8 +173,19 @@ def _load_dataset_from_url(
         fpath += f".{file_type}"
     if force_download and os.path.exists(fpath):
         os.remove(fpath)
-    if not _check_datafile_present_and_download(backup_url=backup_url, path=fpath):
-        raise FileNotFoundError(f"File `{fpath}` not found or download failed.")
+    if bucket_name is not None:
+        import boto3
+        from botocore import UNSIGNED
+        from botocore.config import Config
+
+        s3_client = boto3.client("s3", config=Config(signature_version=UNSIGNED))
+        if not os.path.exists(fpath):
+            os.makedirs(os.path.dirname(fpath), exist_ok=True)
+            # Download the file
+            s3_client.download_file(bucket_name, backup_url, fpath)
+    else:
+        if not _check_datafile_present_and_download(backup_url=backup_url, path=fpath):
+            raise FileNotFoundError(f"File `{fpath}` not found or download failed.")
     data = ad.read_h5ad(filename=fpath, **kwargs)
 
     return data

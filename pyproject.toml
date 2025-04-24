@@ -17,6 +17,7 @@ classifiers = [
 ]
 dependencies = [
   "anndata>=0.10.5",
+  "boto3>=1.33",
   "cellxgene-census>=0.1.17",
   "h5py>=3.10",
   "hydra-core>=1.3",
