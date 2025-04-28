@@ -204,10 +204,21 @@ def download_all_embeddings(
         with tarfile.open(fpath, "r:gz") as tar:
             extraction_dir = os.path.dirname(fpath.replace(".tar.gz", ""))
             for member in tar.getmembers():
-                member_path = os.path.join(extraction_dir, member.name)
+                member_path = os.path.abspath(os.path.join(extraction_dir, member.name))
                 if not member_path.startswith(os.path.abspath(extraction_dir)):
                     raise ValueError(f"Illegal tar archive entry: {member.name}")
-            tar.extractall(extraction_dir)
+                if member.islnk() or member.issym():
+                    raise ValueError(f"Unsupported symbolic link in tar archive: {member.name}")
+            tar.extractall(
+                extraction_dir,
+                members=[
+                    member
+                    for member in tar.getmembers()
+                    if os.path.abspath(os.path.join(extraction_dir, member.name)).startswith(
+                        os.path.abspath(extraction_dir)
+                    )
+                ],
+            )
 
 
 def _load_dataset_from_url(
