@@ -9,9 +9,9 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     # TODO: Once the repo is public, uncomment the following and remove the test token
-    # environment: pypi
-    # permissions:
-    #   id-token: write # to authenticate as Trusted Publisher to pypi.org
+    environment: pypi
+    permissions:
+      id-token: write # to authenticate as Trusted Publisher to pypi.org
     steps:
       - name: Checkout
         uses: actions/checkout@v4
