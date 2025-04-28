@@ -24,7 +24,7 @@ torch._dynamo.config.cache_size_limit = 1000
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
-def run_inference(cfg, data_files=None):
+def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
     """Run inference using the provided config and AnnData object.
 
     Args:
@@ -45,6 +45,7 @@ def run_inference(cfg, data_files=None):
         emb_matrix=emb_matrix,
     )
     model.eval()
+
     logging.info("Model instantiated successfully")
 
     # Check if checkpoint is supplied

@@ -81,7 +81,9 @@ def download_and_extract(model_name: str, checkpoint_dir: str = "./checkpoints")
                     """Callback function to report download progress."""
                     if total_size > 0:
                         print_progress(
-                            count * block_size, total_size, prefix=f"Downloading {model_name}", suffix="bytes"
+                            count * block_size,
+                            total_size,
+                            prefix=f"Downloading {model_name}",
                         )
 
                 urllib.request.urlretrieve(s3_path, filename=tmp_file.name, reporthook=report_hook)
@@ -107,7 +109,11 @@ def download_and_extract(model_name: str, checkpoint_dir: str = "./checkpoints")
                     total_files = len(members)
                     for i, member in enumerate(members, 1):
                         tar.extract(member, path=str(output_dir.parent))
-                        print_progress(i, total_files, prefix=f"Extracting {model_name}", suffix="files")
+                        print_progress(
+                            i,
+                            total_files,
+                            prefix=f"Extracting {model_name}",
+                        )
                 print()  # New line after extraction completes
             except tarfile.ReadError:
                 print(f"Error: The downloaded file for {model_name} is not a valid tar.gz archive")

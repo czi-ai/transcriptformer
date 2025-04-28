@@ -3,6 +3,7 @@ import pickle
 
 import h5py
 import numpy as np
+import pandas as pd
 import torch
 
 # Set up logging
@@ -78,3 +79,25 @@ def save_as_hdf5(data_dict, output_path):
         arrays_group = f.create_group("arrays")
         for key, value in data_dict.items():
             arrays_group.create_dataset(str(key), data=value)
+
+
+def filter_minimum_class(
+    X: np.ndarray, y: np.ndarray | pd.Series, min_class_size: int = 10
+) -> tuple[np.ndarray, np.ndarray | pd.Series]:
+    logging.info(f"Label composition ({y.name}):")
+    value_counts = y.value_counts()
+    logging.info(f"Total classes before filtering: {len(value_counts)}")
+
+    filtered_counts = value_counts[value_counts >= min_class_size]
+    logging.info(f"Total classes after filtering (min_class_size={min_class_size}): {len(filtered_counts)}")
+
+    y = pd.Series(y) if isinstance(y, np.ndarray) else y
+    class_counts = y.value_counts()
+
+    valid_classes = class_counts[class_counts >= min_class_size].index
+    valid_indices = y.isin(valid_classes)
+
+    X_filtered = X[valid_indices]
+    y_filtered = y[valid_indices]
+
+    return X_filtered, pd.Categorical(y_filtered)

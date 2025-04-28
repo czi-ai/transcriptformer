@@ -9,7 +9,7 @@ model:
     batch_size: 8  # Number of samples to process in each batch
     output_keys:
       - embeddings  # Include cell embeddings in the output
-      - llh # ztp log-likelihood
+      # - llh # ztp log-likelihood
     obs_keys:
       - all  # Return all columns from the obs dataframe in the output
       # - cell_type  # Uncomment to only return cell_type column

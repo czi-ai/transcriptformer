@@ -2,8 +2,8 @@ import logging
 import os
 import random
 
+import anndata
 import numpy as np
-import pandas as pd
 import scanpy as sc
 import torch
 from scipy.sparse import csc_matrix, csr_matrix
@@ -27,33 +27,13 @@ def load_data(file_path):
         return None, False
 
 
-def load_gene_features(adata, file_path, gene_col_name):
+def load_gene_features(adata, gene_col_name):
     """Load gene features from a CSV file."""
     try:
-        var_file = os.path.join(os.path.dirname(file_path), "var.csv")
-        df = pd.read_csv(var_file)
-
-        gene_ids = np.array(list(df[gene_col_name].values))
-        return gene_ids, True
+        gene_names = np.array(list(adata.var[gene_col_name].values))
+        return gene_names, True
     except KeyError:
-        # Check if all gene IDs in index start with "EN" (Ensembl format)
-        # Get first column in df
-        first_col = df.iloc[:, 0]
-        if all(first_col.str.startswith("EN")):
-            gene_names = np.array(list(first_col.values))
-            return gene_names, True
-        else:
-            logging.warning("gene IDs in var index are not in Ensembl format")
-            return None, False
-    except FileNotFoundError:
-        logging.info(f"File {var_file} not found. Attempting to get gene names from AnnData.")
-        # some datasets don't have a var.csv file associated with them
-        # (e.g. data outside the training and validation set)
-        try:
-            gene_names = np.array(list(adata.var[gene_col_name].values))
-            return gene_names, True
-        except KeyError:
-            return None, False
+        return None, False
 
 
 def apply_filters(
@@ -186,7 +166,7 @@ def process_batch(
 class AnnDataset(Dataset):
     def __init__(
         self,
-        files_list: list[str],
+        files_list: list[str] | list[anndata.AnnData],
         gene_vocab: dict[str, str],
         data_dir: str = None,
         aux_vocab: dict[str, dict[str, str]] = None,
@@ -234,26 +214,30 @@ class AnnDataset(Dataset):
         logging.info("Loading and processing all data")
         self.data = self.load_and_process_all_data()
 
-    def _get_batch_from_file(self, file_path) -> BatchData | None:
-        if self.data_dir is not None:
-            file_path = os.path.join(self.data_dir, file_path)
+    def _get_batch_from_file(self, file: str | anndata.AnnData) -> BatchData | None:
+        if isinstance(file, str):
+            if self.data_dir is not None:
+                file_path = os.path.join(self.data_dir, file)
 
-        adata, success = load_data(file_path)
+            adata, success = load_data(file_path)
+        elif isinstance(file, anndata.AnnData):
+            adata = file
+            success = True
+            file_path = None
+        else:
+            raise ValueError(f"Invalid file type: {type(file)}")
+
         if not success:
             logging.error(f"Failed to load data from {file_path}")
             return None
 
-        gene_names, success = load_gene_features(adata, file_path, self.gene_col_name)
+        gene_names, success = load_gene_features(adata, self.gene_col_name)
         if not success:
             logging.error(f"Failed to load gene features from {file_path}")
             return None
 
         X = adata.X.toarray() if isinstance(adata.X, csr_matrix | csc_matrix) else adata.X
         obs = adata.obs
-
-        if "dataset_id" not in obs.columns:
-            # If not, add it using the file path
-            obs["dataset_id"] = [file_path.split("/")[-2]] * len(obs)
 
         vocab = self.gene_vocab
         X, obs, gene_names = apply_filters(
@@ -305,9 +289,9 @@ class AnnDataset(Dataset):
 
     def load_and_process_all_data(self):
         all_data = []
-        for i, file_path in enumerate(self.files_list):
+        for i, file in enumerate(self.files_list):
             logging.info(f"Processing validation file {i+1} of {len(self.files_list)}")
-            file_batch = self._get_batch_from_file(file_path)
+            file_batch = self._get_batch_from_file(file)
             if file_batch is None:
                 continue
 
