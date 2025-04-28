@@ -64,20 +64,19 @@ jobs:
           polling_interval_seconds: 5
           command: pip index versions --index-url https://test.pypi.org/simple/ transcriptformer | grep "Available.*${{ steps.get_version.outputs.VERSION }}"
 
-      # TODO: Once the repo is public, uncomment the following and remove the test token
-      # - name: Publish to PyPI
-      #   uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
 
-      # - name: Confirm publish to PyPI
-      #   uses: nick-fields/retry@v3
-      #   with:
-      #     max_attempts: 15
-      #     timeout_seconds: 30
-      #     polling_interval_seconds: 5
-      #     command: pip index versions transcriptformer | grep "Available.*${{ steps.get_version.outputs.VERSION }}"
+      - name: Confirm publish to PyPI
+        uses: nick-fields/retry@v3
+        with:
+          max_attempts: 15
+          timeout_seconds: 30
+          polling_interval_seconds: 5
+          command: pip index versions transcriptformer | grep "Available.*${{ steps.get_version.outputs.VERSION }}"
 
-      # - name: Install and Test Package from PyPI
-      #   run: |
-      #     pip install --no-cache-dir transcriptformer
-      #     python -c "import transcriptformer"
-      #     pip freeze | grep "transcriptformer==${{ steps.get_version.outputs.VERSION }}"
+      - name: Install and Test Package from PyPI
+        run: |
+          pip install --no-cache-dir transcriptformer
+          python -c "import transcriptformer"
+          pip freeze | grep "transcriptformer==${{ steps.get_version.outputs.VERSION }}"
