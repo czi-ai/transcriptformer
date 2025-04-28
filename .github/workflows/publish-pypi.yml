@@ -49,21 +49,6 @@ jobs:
       - name: Validate distribution files
         run: twine check dist/*
 
-      - name: Publish to TestPyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          # TODO: Once the repo is public, switch to publishing via Trusted Publisher and remove the test token
-          password: ${{ secrets.TEST_PYPI_CZI_API_TOKEN }}
-          repository-url: https://test.pypi.org/legacy/
-
-      - name: Confirm publish to Test PyPI
-        uses: nick-fields/retry@v3
-        with:
-          max_attempts: 15
-          timeout_seconds: 30
-          polling_interval_seconds: 5
-          command: pip index versions --index-url https://test.pypi.org/simple/ transcriptformer | grep "Available.*${{ steps.get_version.outputs.VERSION }}"
-
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 
