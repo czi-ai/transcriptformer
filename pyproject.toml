@@ -97,6 +97,3 @@ lint.pydocstyle.convention = "numpy"
 
 [tool.coverage.run]
 source = [ "src/transcriptformer" ]
-
-[tool.hatch.build.targets.wheel]
-packages = [ "src/transcriptformer" ]
