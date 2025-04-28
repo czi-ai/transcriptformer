@@ -48,6 +48,9 @@ Transcriptformer has the following core dependencies:
 
 See the `pyproject.toml` file for the complete list of dependencies.
 
+### Hardware Requirements
+You'll need a Python environment with GPU access to run this model. While we've tested it on NVIDIA A100 GPUs, you can use smaller GPUs like the T4 for the smaller version of the model.
+
 ## Downloading Model Weights
 
 Model weights and artifacts are available via AWS S3. You can download them using the provided `download_artifacts.py` script:
