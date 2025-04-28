@@ -189,11 +189,13 @@ def download_all_embeddings(
     from botocore import UNSIGNED
     from botocore.config import Config
 
+    file_name = "all_embeddings.tar.gz"
+
     if path is None:
-        path = "~/.cache/transcriptformer/all_embeddings.tar.gz"
+        path = "~/.cache/transcriptformer/" + file_name
 
     bucket_name = "czi-transcriptformer"
-    backup_url = "weights/all_embeddings.tar.gz"
+    backup_url = "weights/" + file_name
     s3_client = boto3.client("s3", config=Config(signature_version=UNSIGNED))
     fpath = os.path.expanduser(path)
     if not os.path.exists(fpath):
