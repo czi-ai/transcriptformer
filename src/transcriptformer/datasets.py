@@ -174,6 +174,7 @@ def bgee_testis_evolution(
 
 def download_all_embeddings(
     path: PathLike | None = None,
+    force_download: bool = False,
     **kwargs: Any,
 ) -> None:
     """
@@ -181,8 +182,10 @@ def download_all_embeddings(
 
     Args:
         path: Path to save the dataset. If None, uses default path.
-        force_download: Whether to force download the dataset.
+        force_download: Whether to force download the dataset and overwrite existing files.
+        **kwargs: Additional arguments passed to the download function.
     """
+    import shutil
     import tarfile
 
     import boto3
@@ -192,35 +195,58 @@ def download_all_embeddings(
     file_name = "all_embeddings.tar.gz"
 
     if path is None:
-        path = "~/.cache/transcriptformer/" + file_name
+        path = "~/.cache/transcriptformer"
+
+    # Ensure path is expanded and normalized
+    path = os.path.expanduser(path)
+
+    # Define the tar file path and extraction directory
+    tar_path = os.path.join(path, file_name)
+    extraction_dir = path  # Extract to the same directory as the tar file
 
     bucket_name = "czi-transcriptformer"
     backup_url = "weights/" + file_name
     s3_client = boto3.client("s3", config=Config(signature_version=UNSIGNED))
-    fpath = os.path.expanduser(path)
-    if not os.path.exists(fpath):
-        os.makedirs(os.path.dirname(fpath), exist_ok=True)
-        # Download the file
-        s3_client.download_file(bucket_name, backup_url, fpath)
-        # untar the file
-        with tarfile.open(fpath, "r:gz") as tar:
-            extraction_dir = os.path.dirname(fpath.replace(".tar.gz", ""))
-            for member in tar.getmembers():
-                member_path = os.path.abspath(os.path.join(extraction_dir, member.name))
-                if not member_path.startswith(os.path.abspath(extraction_dir)):
-                    raise ValueError(f"Illegal tar archive entry: {member.name}")
-                if member.islnk() or member.issym():
-                    raise ValueError(f"Unsupported symbolic link in tar archive: {member.name}")
-            tar.extractall(
-                extraction_dir,
-                members=[
-                    member
-                    for member in tar.getmembers()
-                    if os.path.abspath(os.path.join(extraction_dir, member.name)).startswith(
-                        os.path.abspath(extraction_dir)
-                    )
-                ],
-            )
+
+    # Create directory if it doesn't exist
+    os.makedirs(path, exist_ok=True)
+
+    # If force_download is True, remove existing files
+    if force_download:
+        # Remove extracted files if they exist
+        for item in os.listdir(extraction_dir):
+            item_path = os.path.join(extraction_dir, item)
+            if os.path.isdir(item_path) and item != os.path.basename(file_name).split(".")[0]:
+                shutil.rmtree(item_path)
+            elif os.path.isfile(item_path) and item != file_name:
+                os.remove(item_path)
+
+        # Remove tar file if it exists
+        if os.path.exists(tar_path):
+            os.remove(tar_path)
+
+    # Download the file if it doesn't exist
+    if not os.path.exists(tar_path):
+        s3_client.download_file(bucket_name, backup_url, tar_path)
+
+    # Extract the tar file
+    with tarfile.open(tar_path, "r:gz") as tar:
+        for member in tar.getmembers():
+            member_path = os.path.abspath(os.path.join(extraction_dir, member.name))
+            if not member_path.startswith(os.path.abspath(extraction_dir)):
+                raise ValueError(f"Illegal tar archive entry: {member.name}")
+            if member.islnk() or member.issym():
+                raise ValueError(f"Unsupported symbolic link in tar archive: {member.name}")
+        tar.extractall(
+            extraction_dir,
+            members=[
+                member
+                for member in tar.getmembers()
+                if os.path.abspath(os.path.join(extraction_dir, member.name)).startswith(
+                    os.path.abspath(extraction_dir)
+                )
+            ],
+        )
 
 
 def _load_dataset_from_url(
