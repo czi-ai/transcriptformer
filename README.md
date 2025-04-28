@@ -6,7 +6,7 @@ Transcriptformer is a deep learning model for cross-species single-cell RNA sequ
 
 ## Installation
 
-Transcriptformer requires Python 3.8-3.11 (3.11 recommended).
+Transcriptformer requires Python >=3.11.
 
 #### Install from source with uv
 
