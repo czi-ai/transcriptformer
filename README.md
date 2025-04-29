@@ -3,7 +3,7 @@
 <p align="center">
   <img src="assets/model_overview.png" width="600" alt="TranscriptFormer Overview">
   <br>
-  <em>Overview of TranscriptFormer pretraining data (A), model (B), outputs (C) and downstream tasks (D). 
+  <em>Overview of TranscriptFormer pretraining data (A), model (B), outputs (C) and downstream tasks (D).
 </em>
 </p>
 
@@ -78,7 +78,7 @@ Transcriptformer has the following core dependencies:
 See the `pyproject.toml` file for the complete list of dependencies.
 
 ### Hardware Requirements
-- GPU (A100 40GB recommended) for efficient inference and embedding extraction. 
+- GPU (A100 40GB recommended) for efficient inference and embedding extraction.
 - Can also use a GPU with a lower amount of VRAM (16GB) by setting the inference batch size to 1-4.
 
 
