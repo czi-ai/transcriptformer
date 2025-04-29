@@ -1,5 +1,12 @@
 # TranscriptFormer
 
+<p align="center">
+  <img src="assets/model_overview.png" width="600" alt="TranscriptFormer Overview">
+  <br>
+  <em>Overview of TranscriptFormer pretraining data (A), model (B), outputs (C) and downstream tasks (D). 
+</em>
+</p>
+
 **Authors:** James D Pearce, Sara E Simmonds*, Gita Mahmoudabadi*, Lakshmi Krishnan*, Giovanni
 Palla, Ana-Maria Istrate, Alexander Tarashansky, Benjamin Nelson, Omar Valenzuela,
 Donghui Li, Stephen R Quake, Theofanis Karaletsos (Chan Zuckerberg Initiative)
@@ -14,8 +21,7 @@ TranscriptFormer is a family of generative foundation models representing a cros
 The model includes 444 million trainable parameters and 633 million non-trainable
 parameters (from frozen pretrained embeddings). Vocabulary size: 247,388.
 
-- **TF-Exemplar**: Trained on 110 million cells from five model organisms: human (H. sapi-
-ens), mouse (M. musculus), zebrafish (D. rerio), fruit fly (D. melanogaster ), and C. ele-
+- **TF-Exemplar**: Trained on 110 million cells from human and four model organisms: mouse (M. musculus), zebrafish (D. rerio), fruit fly (D. melanogaster ), and C. ele-
 gans. Total trainable parameters: 542 million; non-trainable: 282 million. Vocabulary size:
 110,290.
 
@@ -24,7 +30,7 @@ gans. Total trainable parameters: 542 million; non-trainable: 282 million. Vocab
 
 TranscriptFormer is designed to learn rich, context-aware representations of single-cell transcriptomes while jointly modeling genes and transcripts using a novel generative architecture. It employs a generative autoregressive joint model over genes and their expression levels per cell across species, with a transformer-based architecture, including a novel coupling between gene and transcript heads, expression-aware multi-head self-attention, causal masking, and a count likelihood to capture transcript-level variability. TranscriptFormer demonstrates robust zero-shot performance for cell type classification across species, disease state identification in human cells, and prediction of cell type specific transcription factors and gene-gene regulatory relationships. This work establishes a powerful framework for integrating and interrogating cellular diversity across species as well as offering a foundation for in-silico experimentation with a generative single-cell atlas model.
 
-For more details, please refer to our manuscript: [A Cross-Species Generative Cell Atlas Across 1.5 Billion Years of Evolution: The TranscriptFormer Single-cell Model](https://doi.org/10.1234/transcriptformer.2024) (TODO Update dummy link when availible)
+For more details, please refer to our manuscript: [A Cross-Species Generative Cell Atlas Across 1.5 Billion Years of Evolution: The TranscriptFormer Single-cell Model](https://doi.org/10.1234/transcriptformer.2024) (TODO: Update dummy link when availible)
 
 
 ## Installation
@@ -204,4 +210,4 @@ Please note: If you believe you have found a security issue, please responsibly 
 ## Citation
 
 If you use TranscriptFormer in your research, please cite:
-Pearce, J. D., et. al.. (2025). A Cross-Species Generative Cell Atlas Across 1.5 Billion Years of Evolution: The TranscriptFormer Single-cell Model. bioRxiv. Retrieved April 24, 2025, from https://www.biorxiv.org/placeholder-link (TODO update link)
+Pearce, J. D., et. al. (2025). A Cross-Species Generative Cell Atlas Across 1.5 Billion Years of Evolution: The TranscriptFormer Single-cell Model. bioRxiv. Retrieved April 24, 2025, from https://www.biorxiv.org/placeholder-link (TODO: update link)
