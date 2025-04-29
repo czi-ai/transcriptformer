@@ -1,8 +1,31 @@
 # TranscriptFormer
 
+**Authors:** James D Pearce, Sara E Simmonds*, Gita Mahmoudabadi*, Lakshmi Krishnan*, Giovanni
+Palla, Ana-Maria Istrate, Alexander Tarashansky, Benjamin Nelson, Omar Valenzuela,
+Donghui Li, Stephen R Quake, Theofanis Karaletsos (Chan Zuckerberg Initiative)
+
+*Equal contribution
+
 ## Description
 
-Transcriptformer is a deep learning model for cross-species single-cell RNA sequencing analysis. It uses transformer-based architectures to learn representations of gene expression data across multiple species, leveraging protein sequence information through ESM-2 embeddings.
+TranscriptFormer is a family of generative foundation models representing a cross-species generative cell atlas trained on up to 112 million cells spanning 1.53 billion years of evolution across 12 species. The models include three distinct versions:
+
+- **TF-Metazoa**: Trained on 112 million cells spanning all twelve species. The set covers six vertebrates (human, mouse, rabbit, chicken, African clawed frog, zebrafish), four invertebrates (sea urchin, C. elegans, fruit fly, freshwater sponge), plus a fungus (yeast) and a protist (malaria parasite).
+The model includes 444 million trainable parameters and 633 million non-trainable
+parameters (from frozen pretrained embeddings). Vocabulary size: 247,388.
+
+- **TF-Exemplar**: Trained on 110 million cells from five model organisms: human (H. sapi-
+ens), mouse (M. musculus), zebrafish (D. rerio), fruit fly (D. melanogaster ), and C. ele-
+gans. Total trainable parameters: 542 million; non-trainable: 282 million. Vocabulary size:
+110,290.
+
+- **TF-Sapiens**: Trained on 57 million human-only cells. This model has 368 million trainable parameters and 61 million non-trainable parameters. Vocabulary size: 23,829.
+
+
+TranscriptFormer is designed to learn rich, context-aware representations of single-cell transcriptomes while jointly modeling genes and transcripts using a novel generative architecture. It employs a generative autoregressive joint model over genes and their expression levels per cell across species, with a transformer-based architecture, including a novel coupling between gene and transcript heads, expression-aware multi-head self-attention, causal masking, and a count likelihood to capture transcript-level variability. TranscriptFormer demonstrates robust zero-shot performance for cell type classification across species, disease state identification in human cells, and prediction of cell type specific transcription factors and gene-gene regulatory relationships. This work establishes a powerful framework for integrating and interrogating cellular diversity across species as well as offering a foundation for in-silico experimentation with a generative single-cell atlas model.
+
+For more details, please refer to our manuscript: [A Cross-Species Generative Cell Atlas Across 1.5 Billion Years of Evolution: The TranscriptFormer Single-cell Model](https://doi.org/10.1234/transcriptformer.2024) (TODO Update dummy link when availible)
+
 
 ## Installation
 
@@ -49,7 +72,9 @@ Transcriptformer has the following core dependencies:
 See the `pyproject.toml` file for the complete list of dependencies.
 
 ### Hardware Requirements
-You'll need a Python environment with GPU access to run this model. While we've tested it on NVIDIA A100 GPUs, you can use smaller GPUs like the T4 for the smaller version of the model.
+- GPU (A100 40GB recommended) for efficient inference and embedding extraction. 
+- Can also use a GPU with a lower amount of VRAM (16GB) by setting the inference batch size to 1-4.
+
 
 ## Downloading Model Weights
 
@@ -175,3 +200,8 @@ This project adheres to the Contributor Covenant code of conduct. By participati
 
 ## Reporting Security Issues
 Please note: If you believe you have found a security issue, please responsibly disclose by contacting us at security@chanzuckerberg.com.
+
+## Citation
+
+If you use TranscriptFormer in your research, please cite:
+Pearce, J. D., et. al.. (2025). A Cross-Species Generative Cell Atlas Across 1.5 Billion Years of Evolution: The TranscriptFormer Single-cell Model. bioRxiv. Retrieved April 24, 2025, from https://www.biorxiv.org/placeholder-link (TODO update link)
