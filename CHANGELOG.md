@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.1](https://github.com/czi-ai/transcriptformer/compare/v0.1.0...v0.1.1) (2025-05-02)
+
+
+### Bug Fixes
+
+* file_path bug ([669a6bf](https://github.com/czi-ai/transcriptformer/commit/669a6bf1a92d6010d1ca0cfae80e89ec9cc9dbff))
+* fix file name ([#9](https://github.com/czi-ai/transcriptformer/issues/9)) ([91f744e](https://github.com/czi-ai/transcriptformer/commit/91f744e764d20feb5c5011a43f13f7f342ef7ec7))
+* updated README.md ([#14](https://github.com/czi-ai/transcriptformer/issues/14)) ([f376457](https://github.com/czi-ai/transcriptformer/commit/f376457ab012ac033b39ad59118176286611728f))
+
 ## 0.1.0 (2025-04-28)
 
 
