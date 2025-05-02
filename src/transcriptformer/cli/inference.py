@@ -19,9 +19,12 @@ from omegaconf import DictConfig, OmegaConf
 from transcriptformer.model.inference import run_inference
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
-print("""
+print(
+    """
 \033[38;2;138;43;226m ___________  ___   _   _  _____           _       _  ______ ______________  ___ ___________
 \033[38;2;138;43;226m|_   _| ___ \\/ _ \\ | \\ | |/  ___|         (_)     | | |  ___|  _  | ___ \\  \\/  ||  ___| ___ \\
 \033[38;2;132;57;207m  | | | |_/ / /_\\ \\|  \\| |\\ `--.  ___ _ __ _ _ __ | |_| |_  | | | | |_/ / .  . || |__ | |_/ /
@@ -30,10 +33,13 @@ print("""
 \033[38;2;114;99;150m  \\_/ \\_| \\_\\_| |_/\\_| \\_/\\____/ \\___|_|  |_| .__/ \\__\\_|    \\___/\\_| \\_\\_|  |_/\\____/\\_| \\_|
 \033[38;2;108;113;131m                                            | |
 \033[38;2;108;113;131m                                            |_|
-\033[0m""")
+\033[0m"""
+)
 
 
-@hydra.main(config_path="conf", config_name="config.yaml", version_base=None)
+@hydra.main(
+    config_path="../../../conf", config_name="inference_config.yaml", version_base=None
+)
 def main(cfg: DictConfig):
     logging.debug(OmegaConf.to_yaml(cfg))
 
@@ -46,9 +52,15 @@ def main(cfg: DictConfig):
     cfg = OmegaConf.merge(mlflow_cfg, cfg)
 
     # Set the checkpoint paths based on the unified checkpoint_path
-    cfg.model.inference_config.load_checkpoint = os.path.join(cfg.model.checkpoint_path, "model_weights.pt")
-    cfg.model.data_config.aux_vocab_path = os.path.join(cfg.model.checkpoint_path, "vocabs")
-    cfg.model.data_config.esm2_mappings_path = os.path.join(cfg.model.checkpoint_path, "vocabs")
+    cfg.model.inference_config.load_checkpoint = os.path.join(
+        cfg.model.checkpoint_path, "model_weights.pt"
+    )
+    cfg.model.data_config.aux_vocab_path = os.path.join(
+        cfg.model.checkpoint_path, "vocabs"
+    )
+    cfg.model.data_config.esm2_mappings_path = os.path.join(
+        cfg.model.checkpoint_path, "vocabs"
+    )
 
     adata_output = run_inference(cfg, data_files=cfg.model.inference_config.data_files)
 

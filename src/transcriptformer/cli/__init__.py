@@ -47,14 +47,8 @@ Examples:
 """
 
 import argparse
-import json
 import logging
-import os
 import sys
-from pathlib import Path
-
-import hydra
-from omegaconf import DictConfig, OmegaConf
 
 # Set up logging
 logging.basicConfig(
@@ -168,7 +162,7 @@ def setup_download_parser(subparsers):
 def run_inference_cli(args):
     """Run inference using command line arguments."""
     # Import the inference module directly
-    from inference import main as inference_main
+    from transcriptformer.cli.inference import main as inference_main
 
     # Create a hydra-compatible config dictionary for direct use with inference.py
     cmd = [
@@ -209,7 +203,7 @@ def run_inference_cli(args):
 def run_download_cli(args):
     """Run download using command line arguments."""
     # Import the download_artifacts module directly
-    from download_artifacts import download_and_extract
+    from transcriptformer.cli.download_artifacts import download_and_extract
 
     models = {
         "tf-sapiens": "tf_sapiens",

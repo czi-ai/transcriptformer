@@ -48,14 +48,11 @@ urls."Bug Tracker" = "https://github.com/czi-ai/transcriptformer/issues"
 urls."Homepage" = "https://github.com/czi-ai/transcriptformer"
 
 [project.scripts]
-transcriptformer = "cli:main"
+transcriptformer = "transcriptformer.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = [ "src/transcriptformer" ]
 include = [
-  "cli.py",
-  "inference.py",
-  "download_artifacts.py",
   "conf/**/*"
 ]
 
