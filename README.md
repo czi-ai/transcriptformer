@@ -151,37 +151,7 @@ transcriptformer inference --help
 transcriptformer download --help
 ```
 
-## Using the Python Scripts Directly
-
-If you've installed the package from source, you can also use the Python scripts directly:
-
-### Downloading Model Weights
-
-```bash
-python download_artifacts.py tf-sapiens
-python download_artifacts.py all
-```
-
-### Running Inference
-
-```bash
-python inference.py --config-name=inference_config.yaml \
-  model.checkpoint_path=./checkpoints/tf_sapiens \
-  model.inference_config.data_files.0=test/data/human_val.h5ad \
-  model.inference_config.batch_size=8
-```
-
-### Key Parameters:
-
-- `--checkpoint-path`: Path to the checkpoint directory containing model weights and vocabulary files
-- `--data-file`: Path to input data file (H5AD format)
-- `--output-path`: Directory to save inference results
-- `--batch-size`: Batch size for inference (default: 8)
-- `--gene-col-name`: Column in AnnData.var with gene identifiers (default: "ensembl_id")
-- `--precision`: Numerical precision (default: "16-mixed")
-- `--pretrained-embedding`: Path to pretrained embeddings (for out-of-distribution species)
-
-#### Input Data Format:
+### Input Data Format:
 
 Input data files should be in H5AD format (AnnData objects) with the following requirements:
 
@@ -195,7 +165,7 @@ Input data files should be in H5AD format (AnnData objects) with the following r
 
 - **Cell Metadata**: Any cell metadata in the `obs` dataframe will be preserved in the output
 
-#### Output Format:
+### Output Format:
 
 The inference results will be saved to the specified output directory (default: `./inference_results`) in a file named `embeddings.h5ad`. This is an AnnData object where:
 
@@ -203,7 +173,7 @@ The inference results will be saved to the specified output directory (default: 
 - Original cell metadata is preserved in the `obs` dataframe
 - Log-likelihood scores (if available) are stored in `uns['llh']`
 
-For detailed configuration options, see the `conf/inference_config.yaml` file.
+For detailed configuration options, see the `src/transcriptformer/cli/conf/inference_config.yaml` file.
 
 ## Contributing
 This project adheres to the Contributor Covenant code of conduct. By participating, you are expected to uphold this code. Please report unacceptable behavior to opensource@chanzuckerberg.com.
