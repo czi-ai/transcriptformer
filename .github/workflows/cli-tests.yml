@@ -1,0 +1,55 @@
+name: CLI Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/transcriptformer/cli/**"
+      - "test/test_cli*.py"
+      - "pyproject.toml"
+  pull_request:
+    paths:
+      - "src/transcriptformer/cli/**"
+      - "test/test_cli*.py"
+      - "pyproject.toml"
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  cli-unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Add uv to PATH
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system -e '.[dev]'
+          uv pip install --system pytest-cov
+
+      - name: Run CLI unit tests
+        run: |
+          pytest test/test_cli.py test/test_cli_integration.py -v --cov=transcriptformer.cli --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: true
+          name: cli-coverage
+          flags: cli
+          verbose: true
