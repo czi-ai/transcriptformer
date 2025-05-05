@@ -35,7 +35,11 @@ print(
 )
 
 
-@hydra.main(config_path="./conf", config_name="inference_config.yaml", version_base=None)
+@hydra.main(
+    config_path=os.path.join(os.path.dirname(__file__), "conf"),
+    config_name="inference_config.yaml",
+    version_base=None,
+)
 def main(cfg: DictConfig):
     logging.debug(OmegaConf.to_yaml(cfg))
 
