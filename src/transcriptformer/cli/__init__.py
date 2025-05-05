@@ -17,6 +17,7 @@ Common Options for Inference:
     --checkpoint-path      Path to model checkpoint directory (required)
     --data-file            Path to input AnnData file (required)
     --output-path          Directory for saving results
+    --output-filename      Filename for the output embeddings
     --batch-size           Batch size for inference
     --gene-col-name        Column in AnnData.var with gene identifiers
     --precision            Numerical precision (16-mixed or 32)
@@ -33,6 +34,7 @@ Examples
 
     # Run inference with additional options
     transcriptformer inference --checkpoint-path ./checkpoints/tf_sapiens --data-file ./data/my_data.h5ad \
+      --output-path ./custom_output_dir --output-filename custom_output.h5ad \
       --batch-size 16 --gene-col-name gene_id --precision 32
 
     # Run inference with advanced configuration overrides
@@ -90,6 +92,11 @@ def setup_inference_parser(subparsers):
         "--output-path",
         default="./inference_results",
         help="Directory where results will be saved (default: ./inference_results)",
+    )
+    parser.add_argument(
+        "--output-filename",
+        default="embeddings.h5ad",
+        help="Filename for the output embeddings (default: embeddings.h5ad)",
     )
 
     # Optional arguments
@@ -171,6 +178,7 @@ def run_inference_cli(args):
         f"model.inference_config.batch_size={args.batch_size}",
         f"model.data_config.gene_col_name={args.gene_col_name}",
         f"model.inference_config.output_path={args.output_path}",
+        f"model.inference_config.output_filename={args.output_filename}",
         f"model.inference_config.precision={args.precision}",
     ]
 

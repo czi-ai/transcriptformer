@@ -170,6 +170,7 @@ class InferenceConfig:
         num_nodes (int): Number of nodes
         load_checkpoint (str): Path to checkpoint to load
         output_path (str): Path to save outputs
+        output_filename (str): Filename for the output embeddings (default: embeddings.h5ad)
         num_gpus_per_node (int): GPUs per node (default: 1)
         special_tokens (list): Special tokens to use
     """
@@ -180,6 +181,7 @@ class InferenceConfig:
     data_files: list | None
     load_checkpoint: str | None
     output_path: str | None
+    output_filename: str | None = "embeddings.h5ad"
     num_gpus_per_node: int = 1
     num_nodes: int = 1
     precision: str = "16-mixed"
