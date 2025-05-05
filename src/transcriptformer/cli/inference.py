@@ -19,9 +19,7 @@ from omegaconf import DictConfig, OmegaConf
 from transcriptformer.model.inference import run_inference
 
 # Set up logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 print(
     """
@@ -37,9 +35,7 @@ print(
 )
 
 
-@hydra.main(
-    config_path="../../../conf", config_name="inference_config.yaml", version_base=None
-)
+@hydra.main(config_path="./conf", config_name="inference_config.yaml", version_base=None)
 def main(cfg: DictConfig):
     logging.debug(OmegaConf.to_yaml(cfg))
 
@@ -52,15 +48,9 @@ def main(cfg: DictConfig):
     cfg = OmegaConf.merge(mlflow_cfg, cfg)
 
     # Set the checkpoint paths based on the unified checkpoint_path
-    cfg.model.inference_config.load_checkpoint = os.path.join(
-        cfg.model.checkpoint_path, "model_weights.pt"
-    )
-    cfg.model.data_config.aux_vocab_path = os.path.join(
-        cfg.model.checkpoint_path, "vocabs"
-    )
-    cfg.model.data_config.esm2_mappings_path = os.path.join(
-        cfg.model.checkpoint_path, "vocabs"
-    )
+    cfg.model.inference_config.load_checkpoint = os.path.join(cfg.model.checkpoint_path, "model_weights.pt")
+    cfg.model.data_config.aux_vocab_path = os.path.join(cfg.model.checkpoint_path, "vocabs")
+    cfg.model.data_config.esm2_mappings_path = os.path.join(cfg.model.checkpoint_path, "vocabs")
 
     adata_output = run_inference(cfg, data_files=cfg.model.inference_config.data_files)
 
