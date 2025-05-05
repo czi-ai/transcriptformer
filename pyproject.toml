@@ -47,13 +47,12 @@ optional-dependencies.dev = [
 urls."Bug Tracker" = "https://github.com/czi-ai/transcriptformer/issues"
 urls."Homepage" = "https://github.com/czi-ai/transcriptformer"
 
-[project.scripts]
-transcriptformer = "transcriptformer.cli:main"
+scripts.transcriptformer = "transcriptformer.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = [ "src/transcriptformer" ]
 include = [
-  "conf/**/*"
+  "conf/**/*",
 ]
 
 [tool.ruff]

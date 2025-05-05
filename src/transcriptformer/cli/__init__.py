@@ -12,7 +12,7 @@ Usage:
 Commands:
     inference     Run inference with a TranscriptFormer model
     download      Download and extract TranscriptFormer model artifacts
-    
+
 Common Options for Inference:
     --checkpoint-path      Path to model checkpoint directory (required)
     --data-file            Path to input AnnData file (required)
@@ -21,27 +21,28 @@ Common Options for Inference:
     --gene-col-name        Column in AnnData.var with gene identifiers
     --precision            Numerical precision (16-mixed or 32)
     --pretrained-embedding Path to embedding file for out-of-distribution species
-    
+
 Advanced Configuration:
     Use --config-override for any configuration options not exposed as arguments above.
     These directly modify values in the inference_config.yaml configuration.
-    
-Examples:
+
+Examples
+--------
     # Run inference with basic options
     transcriptformer inference --checkpoint-path ./checkpoints/tf_sapiens --data-file ./data/my_data.h5ad
-    
+
     # Run inference with additional options
     transcriptformer inference --checkpoint-path ./checkpoints/tf_sapiens --data-file ./data/my_data.h5ad \
       --batch-size 16 --gene-col-name gene_id --precision 32
-      
+
     # Run inference with advanced configuration overrides
     transcriptformer inference --checkpoint-path ./checkpoints/tf_sapiens --data-file ./data/my_data.h5ad \
       --config-override model.data_config.normalize_to_scale=10000 \
       --config-override model.inference_config.obs_keys.0=cell_type
-      
+
     # Download the sapiens model
     transcriptformer download tf-sapiens
-    
+
     # Download all models and embeddings
     transcriptformer download all
 """
@@ -51,9 +52,7 @@ import logging
 import sys
 
 # Set up logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # TranscriptFormer logo
 TF_LOGO = """
@@ -177,9 +176,7 @@ def run_inference_cli(args):
 
     # Add pretrained embedding if specified
     if args.pretrained_embedding:
-        cmd.append(
-            f"model.inference_config.pretrained_embedding={args.pretrained_embedding}"
-        )
+        cmd.append(f"model.inference_config.pretrained_embedding={args.pretrained_embedding}")
 
     # Add any arbitrary config overrides
     for override in args.config_override:
