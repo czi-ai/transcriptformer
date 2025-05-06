@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/czi-ai/transcriptformer/compare/v0.1.1...v0.2.0) (2025-05-06)
+
+
+### Features
+
+* inference and download cli ([#17](https://github.com/czi-ai/transcriptformer/issues/17)) ([8c29323](https://github.com/czi-ai/transcriptformer/commit/8c2932313dcdd47d6bc1480590640ce9d97d2b5d))
+
 ## [0.1.1](https://github.com/czi-ai/transcriptformer/compare/v0.1.0...v0.1.1) (2025-05-02)
 
 
