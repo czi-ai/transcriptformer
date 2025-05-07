@@ -28,15 +28,6 @@ def load_data(file_path):
         return None, False
 
 
-def load_gene_features(adata, gene_col_name):
-    """Load gene features from a CSV file."""
-    try:
-        gene_names = np.array(list(adata.var[gene_col_name].values))
-        return gene_names, True
-    except KeyError:
-        return None, False
-
-
 def apply_filters(
     X,
     obs,
@@ -219,26 +210,38 @@ class AnnDataset(Dataset):
 
     def _get_counts_layer(self, adata: anndata.AnnData) -> str:
         if self.anndata_counts_layer == "auto":
-            if hasattr(adata, "layers") and "decontX" in adata.layers:
+            if hasattr(adata, "layers") and "decontXcounts" in adata.layers:
+                logging.info("Using 'decontXcounts' layer from AnnData object")
+                return adata.layers["decontXcounts"]
+            elif hasattr(adata, "layers") and "decontX" in adata.layers:
+                logging.info("Using 'decontX' layer from AnnData object")
                 return adata.layers["decontX"]
             elif hasattr(adata, "raw") and adata.raw is not None:
+                logging.info("Using 'raw.X' layer from AnnData object")
                 return adata.raw.X
             elif hasattr(adata, "X") and adata.X is not None:
+                logging.info("Using 'X' layer from AnnData object")
                 return adata.X
             else:
                 raise ValueError("No valid data layer found in AnnData object")
         elif self.anndata_counts_layer == "decontX":
-            if hasattr(adata, "layers") and "decontX" in adata.layers:
+            if hasattr(adata, "layers") and "decontXcounts" in adata.layers:
+                logging.info("Using 'decontXcounts' layer from AnnData object")
+                return adata.layers["decontXcounts"]
+            elif hasattr(adata, "layers") and "decontX" in adata.layers:
+                logging.info("Using 'decontX' layer from AnnData object")
                 return adata.layers["decontX"]
             else:
-                raise ValueError("decontX layer not found in AnnData object")
+                raise ValueError("decontXcounts or decontX layer not found in AnnData object")
         elif self.anndata_counts_layer == "raw":
             if hasattr(adata, "raw") and adata.raw is not None:
+                logging.info("Using 'raw.X' layer from AnnData object")
                 return adata.raw.X
             else:
                 raise ValueError("raw.X not found in AnnData object")
         elif self.anndata_counts_layer == "X":
             if hasattr(adata, "X") and adata.X is not None:
+                logging.info("Using 'X' layer from AnnData object")
                 return adata.X
             else:
                 raise ValueError("X not found in AnnData object")
@@ -270,6 +273,30 @@ class AnnDataset(Dataset):
 
         return is_integer
 
+    def _load_gene_features(self, adata):
+        """Load gene features and remove version numbers from ensembl ids"""
+        try:
+            gene_names = np.array(list(adata.var[self.gene_col_name].values))
+            gene_names = np.array([id.split(".")[0] for id in gene_names])
+
+            # Check for duplicates after removing version numbers
+            unique_genes = set(gene_names)
+            if len(unique_genes) != len(gene_names):
+                duplicates = set()
+                for gene in gene_names:
+                    if gene in unique_genes:
+                        duplicates.add(gene)
+
+                raise ValueError(
+                    f"Found {len(duplicates)} duplicate genes after removing version numbers. "
+                    f"Please remove duplicate genes from your data. "
+                    f"Duplicates Found: {list(duplicates)}"
+                )
+
+            return gene_names, True
+        except KeyError:
+            return None, False
+
     def _get_batch_from_file(self, file: str | anndata.AnnData) -> BatchData | None:
         if isinstance(file, str):
             file_path = file
@@ -288,7 +315,7 @@ class AnnDataset(Dataset):
             logging.error(f"Failed to load data from {file_path}")
             return None
 
-        gene_names, success = load_gene_features(adata, self.gene_col_name)
+        gene_names, success = self._load_gene_features(adata)
         if not success:
             logging.error(f"Failed to load gene features from {file_path}")
             return None
@@ -355,7 +382,7 @@ class AnnDataset(Dataset):
     def load_and_process_all_data(self):
         all_data = []
         for i, file in enumerate(self.files_list):
-            logging.info(f"Processing validation file {i+1} of {len(self.files_list)}")
+            logging.info(f"Processing data file {i+1} of {len(self.files_list)}")
             file_batch = self._get_batch_from_file(file)
             if file_batch is None:
                 continue
