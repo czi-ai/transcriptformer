@@ -32,3 +32,4 @@ model:
     sort_genes: false # Whether to sort genes by expression level
     randomize_genes: false # Whether to randomize gene order
     min_expressed_genes: 0 # Minimum number of expressed genes required per cell
+    anndata_counts_layer: "auto" # Layer in AnnData to use for inference, should be one of "auto", "X", "raw", "decontX"

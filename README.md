@@ -151,19 +151,35 @@ transcriptformer inference --help
 transcriptformer download --help
 ```
 
-### Input Data Format:
+### Input Data Format and Preprocessing:
 
 Input data files should be in H5AD format (AnnData objects) with the following requirements:
 
 - **Gene IDs**: The `var` dataframe must contain an `ensembl_id` column with Ensembl gene identifiers
   - Out-of-vocabulary gene IDs will be automatically filtered out during processing
   - Only genes present in the model's vocabulary will be used for inference
+  - The column name can be changed using `model.data_config.gene_col_name`
 
-- **Expression Data**: Raw count data should be stored in the `adata.X` matrix
-  - The model expects raw (non-normalized) counts
-  - Log-transformed or normalized data may lead to unexpected results
+- **Expression Data**: The model expects unnormalized count data and will look for it in the following order:
+  1. `adata.layers['decontX']` (if available)
+  2. `adata.raw.X` (if available)
+  3. `adata.X`
+
+  This behavior can be controlled using `model.data_config.anndata_counts_layer`:
+  - `"auto"` (default): Uses the priority order above
+  - `"decontX"`: Uses only `adata.layers['decontX']`
+  - `"raw"`: Uses only `adata.raw.X`
+  - `"X"`: Uses only `adata.X`
+
+- **Count Processing**:
+  - Count values are clipped at 30 by default (as was done in training)
+  - If this seems too low, you can either:
+    1. Use `model.data_config.normalize_to_scale` to scale total counts to a specific value (e.g., 1e3-1e4)
+    2. Increase `model.data_config.clip_counts` to a value > 30
 
 - **Cell Metadata**: Any cell metadata in the `obs` dataframe will be preserved in the output
+
+No other data preprocessing is necessary - the model handles all required transformations internally. You do not need to perform any additional normalization, scaling, or transformation of the count data before input.
 
 ### Output Format:
 
