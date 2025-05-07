@@ -210,37 +210,37 @@ class AnnDataset(Dataset):
 
     def _get_counts_layer(self, adata: anndata.AnnData) -> str:
         if self.anndata_counts_layer == "auto":
-            if hasattr(adata, "layers") and "decontXcounts" in adata.layers:
+            if "decontXcounts" in adata.layers:
                 logging.info("Using 'decontXcounts' layer from AnnData object")
                 return adata.layers["decontXcounts"]
-            elif hasattr(adata, "layers") and "decontX" in adata.layers:
+            elif "decontX" in adata.layers:
                 logging.info("Using 'decontX' layer from AnnData object")
                 return adata.layers["decontX"]
-            elif hasattr(adata, "raw") and adata.raw is not None:
+            elif adata.raw is not None:
                 logging.info("Using 'raw.X' layer from AnnData object")
                 return adata.raw.X
-            elif hasattr(adata, "X") and adata.X is not None:
+            elif adata.X is not None:
                 logging.info("Using 'X' layer from AnnData object")
                 return adata.X
             else:
                 raise ValueError("No valid data layer found in AnnData object")
         elif self.anndata_counts_layer == "decontX":
-            if hasattr(adata, "layers") and "decontXcounts" in adata.layers:
+            if "decontXcounts" in adata.layers:
                 logging.info("Using 'decontXcounts' layer from AnnData object")
                 return adata.layers["decontXcounts"]
-            elif hasattr(adata, "layers") and "decontX" in adata.layers:
+            elif "decontX" in adata.layers:
                 logging.info("Using 'decontX' layer from AnnData object")
                 return adata.layers["decontX"]
             else:
                 raise ValueError("decontXcounts or decontX layer not found in AnnData object")
         elif self.anndata_counts_layer == "raw":
-            if hasattr(adata, "raw") and adata.raw is not None:
+            if adata.raw is not None:
                 logging.info("Using 'raw.X' layer from AnnData object")
                 return adata.raw.X
             else:
                 raise ValueError("raw.X not found in AnnData object")
         elif self.anndata_counts_layer == "X":
-            if hasattr(adata, "X") and adata.X is not None:
+            if adata.X is not None:
                 logging.info("Using 'X' layer from AnnData object")
                 return adata.X
             else:
