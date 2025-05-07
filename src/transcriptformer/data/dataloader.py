@@ -246,7 +246,7 @@ class AnnDataset(Dataset):
             raise ValueError(f"Invalid counts layer specified: {self.anndata_counts_layer}")
 
     def _to_dense(self, X: np.ndarray | csr_matrix | csc_matrix) -> np.ndarray:
-        if isinstance(X, (csr_matrix, csc_matrix)):
+        if isinstance(X, csr_matrix | csc_matrix):
             return X.toarray()
         elif isinstance(X, np.ndarray):
             return X
