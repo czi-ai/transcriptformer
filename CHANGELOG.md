@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/czi-ai/transcriptformer/compare/v0.2.0...v0.2.1) (2025-05-08)
+
+
+### Bug Fixes
+
+* add back conf and scripts to root of repo ([#23](https://github.com/czi-ai/transcriptformer/issues/23)) ([265ccc1](https://github.com/czi-ai/transcriptformer/commit/265ccc1eac4d01b533723912f75aa143e289d657))
+* issue [#20](https://github.com/czi-ai/transcriptformer/issues/20) ([#25](https://github.com/czi-ai/transcriptformer/issues/25)) ([7ad4445](https://github.com/czi-ai/transcriptformer/commit/7ad4445bfe916bc9f3a323b4fb90fd5a807b199a))
+
 ## [0.2.0](https://github.com/czi-ai/transcriptformer/compare/v0.1.1...v0.2.0) (2025-05-06)
 
 
