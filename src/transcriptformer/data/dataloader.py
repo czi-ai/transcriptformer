@@ -1,7 +1,6 @@
 import logging
 import os
 import random
-from typing import Literal
 
 import anndata
 import numpy as np
@@ -176,7 +175,6 @@ class AnnDataset(Dataset):
         clip_counts: float = 1e10,
         inference: bool = False,
         obs_keys: list[str] = None,
-        anndata_counts_layer: Literal["auto", "X", "raw", "decontX"] = "auto",
         use_raw: bool = None,
     ):
         super().__init__()
@@ -198,7 +196,6 @@ class AnnDataset(Dataset):
         self.clip_counts = clip_counts
         self.inference = inference
         self.obs_keys = obs_keys
-        self.anndata_counts_layer = anndata_counts_layer
         self.use_raw = use_raw
 
         self.gene_tokenizer = BatchGeneTokenizer(gene_vocab)
