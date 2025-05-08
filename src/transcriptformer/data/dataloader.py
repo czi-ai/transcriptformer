@@ -177,6 +177,7 @@ class AnnDataset(Dataset):
         inference: bool = False,
         obs_keys: list[str] = None,
         anndata_counts_layer: Literal["auto", "X", "raw", "decontX"] = "auto",
+        use_raw: bool = None,
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -198,6 +199,7 @@ class AnnDataset(Dataset):
         self.inference = inference
         self.obs_keys = obs_keys
         self.anndata_counts_layer = anndata_counts_layer
+        self.use_raw = use_raw
 
         self.gene_tokenizer = BatchGeneTokenizer(gene_vocab)
         if aux_vocab is not None:
@@ -209,14 +211,20 @@ class AnnDataset(Dataset):
         self.data = self.load_and_process_all_data()
 
     def _get_counts_layer(self, adata: anndata.AnnData) -> str:
-        if self.anndata_counts_layer == "auto":
-            if "decontXcounts" in adata.layers:
-                logging.info("Using 'decontXcounts' layer from AnnData object")
-                return adata.layers["decontXcounts"]
-            elif "decontX" in adata.layers:
-                logging.info("Using 'decontX' layer from AnnData object")
-                return adata.layers["decontX"]
-            elif adata.raw is not None:
+        if self.use_raw is True:
+            if adata.raw is not None:
+                logging.info("Using 'raw.X' layer from AnnData object")
+                return adata.raw.X
+            else:
+                raise ValueError("raw.X not found in AnnData object")
+        elif self.use_raw is False:
+            if adata.X is not None:
+                logging.info("Using 'X' layer from AnnData object")
+                return adata.X
+            else:
+                raise ValueError("X not found in AnnData object")
+        else:  # None - try raw first, then fallback to X
+            if adata.raw is not None:
                 logging.info("Using 'raw.X' layer from AnnData object")
                 return adata.raw.X
             elif adata.X is not None:
@@ -224,29 +232,6 @@ class AnnDataset(Dataset):
                 return adata.X
             else:
                 raise ValueError("No valid data layer found in AnnData object")
-        elif self.anndata_counts_layer == "decontX":
-            if "decontXcounts" in adata.layers:
-                logging.info("Using 'decontXcounts' layer from AnnData object")
-                return adata.layers["decontXcounts"]
-            elif "decontX" in adata.layers:
-                logging.info("Using 'decontX' layer from AnnData object")
-                return adata.layers["decontX"]
-            else:
-                raise ValueError("decontXcounts or decontX layer not found in AnnData object")
-        elif self.anndata_counts_layer == "raw":
-            if adata.raw is not None:
-                logging.info("Using 'raw.X' layer from AnnData object")
-                return adata.raw.X
-            else:
-                raise ValueError("raw.X not found in AnnData object")
-        elif self.anndata_counts_layer == "X":
-            if adata.X is not None:
-                logging.info("Using 'X' layer from AnnData object")
-                return adata.X
-            else:
-                raise ValueError("X not found in AnnData object")
-        else:
-            raise ValueError(f"Invalid counts layer specified: {self.anndata_counts_layer}")
 
     def _to_dense(self, X: np.ndarray | csr_matrix | csc_matrix) -> np.ndarray:
         if isinstance(X, csr_matrix | csc_matrix):

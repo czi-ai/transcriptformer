@@ -1,4 +1,5 @@
 import logging
+import warnings
 
 import anndata
 import pandas as pd
@@ -33,6 +34,10 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
     Returns:
         AnnData: Processed data with embeddings and likelihood scores
     """
+    warnings.filterwarnings(
+        "ignore", message="The 'predict_dataloader' does not have many workers which may be a bottleneck"
+    )
+
     # Load vocabs and embeddings
     (gene_vocab, aux_vocab), emb_matrix = load_vocabs_and_embeddings(cfg)
 

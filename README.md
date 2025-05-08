@@ -161,15 +161,13 @@ Input data files should be in H5AD format (AnnData objects) with the following r
   - The column name can be changed using `model.data_config.gene_col_name`
 
 - **Expression Data**: The model expects unnormalized count data and will look for it in the following order:
-  1. `adata.layers['decontX']` (if available)
-  2. `adata.raw.X` (if available)
-  3. `adata.X`
+  1. `adata.raw.X` (if available)
+  2. `adata.X`
 
-  This behavior can be controlled using `model.data_config.anndata_counts_layer`:
-  - `"auto"` (default): Uses the priority order above
-  - `"decontX"`: Uses only `adata.layers['decontX']`
-  - `"raw"`: Uses only `adata.raw.X`
-  - `"X"`: Uses only `adata.X`
+  This behavior can be controlled using `model.data_config.use_raw`:
+  - `None` (default): Try `adata.raw.X` first, then fall back to `adata.X`
+  - `True`: Use only `adata.raw.X`
+  - `False`: Use only `adata.X`
 
 - **Count Processing**:
   - Count values are clipped at 30 by default (as was done in training)

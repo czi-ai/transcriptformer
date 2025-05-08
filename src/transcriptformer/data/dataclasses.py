@@ -1,7 +1,6 @@
 """Dataclasses for the Transcripformer model."""
 
 from dataclasses import dataclass, field
-from typing import Literal
 
 import numpy as np
 import torch
@@ -140,7 +139,9 @@ class DataConfig:
     esm2_mappings: list[str] | None = None
     special_tokens: list[str] | None = None
     esm2_mappings_path: str | None = None
-    anndata_counts_layer: Literal["auto", "X", "raw", "decontX"] = "auto"
+    use_raw: bool | None = (
+        None  # If True, use adata.raw.X, if False use adata.X, if None try raw first then fallback to X
+    )
 
 
 # Parameters that control the loss function

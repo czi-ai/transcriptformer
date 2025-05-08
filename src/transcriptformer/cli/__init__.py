@@ -133,6 +133,12 @@ def setup_inference_parser(subparsers):
         default=True,
         help="Whether to filter genes to only those in the vocabulary (default: True)",
     )
+    parser.add_argument(
+        "--use-raw",
+        type=lambda x: None if x.lower() == "auto" else x.lower() == "true",
+        default=None,
+        help="Whether to use raw counts from AnnData.raw.X (True), adata.X (False), or auto-detect (None/auto) (default: None)",
+    )
 
     # Allow arbitrary config overrides
     parser.add_argument(
