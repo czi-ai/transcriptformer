@@ -192,7 +192,6 @@ def run_inference_cli(args):
         f"model.inference_config.output_path={args.output_path}",
         f"model.inference_config.output_filename={args.output_filename}",
         f"model.inference_config.precision={args.precision}",
-        f"model.inference_config.embedding_layer_index={args.embedding_layer_index}",
         f"model.model_type={args.model_type}",
     ]
 
