@@ -132,6 +132,15 @@ transcriptformer inference \
   --batch-size 8
 ```
 
+You can also use the CLI it run inference on the ESM2-CE baseline model discussed in the paper:
+
+transcriptformer inference \
+  --checkpoint-path ./checkpoints/tf_sapiens \
+  --data-file test/data/human_val.h5ad \
+  --model-type esm2ce \
+  --batch-size 8
+```
+
 ### Advanced Configuration
 
 For advanced configuration options not exposed as CLI arguments, use the `--config-override` parameter:
@@ -150,6 +159,23 @@ To see all available CLI options:
 transcriptformer inference --help
 transcriptformer download --help
 ```
+
+### CLI Options for `inference`:
+
+- `--checkpoint-path PATH`: Path to the model checkpoint directory (required).
+- `--data-file PATH`: Path to input AnnData file (required).
+- `--output-path DIR`: Directory for saving results (default: `./inference_results`).
+- `--output-filename NAME`: Filename for the output embeddings (default: `embeddings.h5ad`).
+- `--batch-size INT`: Number of samples to process in each batch (default: 8).
+- `--gene-col-name NAME`: Column name in AnnData.var containing gene identifiers (default: `ensembl_id`).
+- `--precision {16-mixed,32}`: Numerical precision for inference (default: `16-mixed`).
+- `--pretrained-embedding PATH`: Path to pretrained embeddings for out-of-distribution species.
+- `--clip-counts INT`: Maximum count value (higher values will be clipped) (default: 30).
+- `--filter-to-vocabs`: Whether to filter genes to only those in the vocabulary (default: True).
+- `--use-raw {True,False,auto}`: Whether to use raw counts from `AnnData.raw.X` (True), `adata.X` (False), or auto-detect (auto/None) (default: None).
+- `--embedding-layer-index INT`: Index of the transformer layer to extract embeddings from (-1 for last layer, default: -1). Use with `transcriptformer` model type.
+- `--model-type {transcriptformer,esm2ce}`: Type of model to use (default: `transcriptformer`). Use `esm2ce` to extract raw ESM2-CE gene embeddings.
+- `--config-override key.path=value`: Override any configuration value directly.
 
 ### Input Data Format and Preprocessing:
 

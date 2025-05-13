@@ -3,6 +3,7 @@ defaults:
 
 model:
   checkpoint_path: null # Path to the model checkpoint directory
+  model_type: "transcriptformer" # Add default value here
 
   inference_config: # inference settings
     _target_: transcriptformer.data.dataclasses.InferenceConfig

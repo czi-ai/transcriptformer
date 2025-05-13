@@ -51,6 +51,7 @@ class ModelConfig:
 
     # Optional fields
     gene_head_hidden_dim: int = 2048
+    use_aux: bool = False
 
     def __post_init__(self):
         if (self.seq_len + self.aux_len) % self.block_len != 0:

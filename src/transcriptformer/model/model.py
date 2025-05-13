@@ -80,7 +80,6 @@ class Transcriptformer(pl.LightningModule):
         )
         # Load the auxiliary vocab if provided
         if self.aux_vocab_dict is not None:
-            self.model_config.use_aux = True
             self.aux_vocab = AuxVocab(
                 vocab_dict=self.aux_vocab_dict,
                 vocab_size=sum([len(v) + 1 for v in self.aux_vocab_dict.values()]),
@@ -89,7 +88,7 @@ class Transcriptformer(pl.LightningModule):
             )
 
     def _init_model_components(self):
-        if self.model_config.use_aux:
+        if hasattr(self, "aux_vocab") and self.aux_vocab is not None:
             self._init_aux_embeddings()
 
         # Encoder and heads
@@ -429,3 +428,42 @@ class Transcriptformer(pl.LightningModule):
     def predict_step(self, batch, batch_idx):
         assert self.inference_config.output_keys, "output_keys must be set in inference_config"
         return self.inference(batch)
+
+
+class ESM2CE(Transcriptformer):
+    """ESM2-CE model."""
+
+    def forward(
+        self,
+        batch: BatchData,
+        embed: bool = False,
+        **kwargs,
+    ) -> dict:
+        """Forward pass of the model.
+
+        Args:
+            batch (BatchData): The batch data containing gene_counts and gene_token_indices.
+            embed (bool): Whether to return embeddings.
+
+        Returns
+        -------
+            dict: The model output consisting of keys:
+                - embeddings: The embeddings if embed is True.
+                - input_counts: The input count data.
+                - mask: The mask for the output.
+        """
+        gene_counts = batch.gene_counts
+        gene_token_indices = batch.gene_token_indices
+
+        # Embed the gene_tokens
+        gene_embeddings = self.gene_embeddings(gene_token_indices, embed_only=True)
+        pad_mask = self._pad_mask(gene_token_indices, dtype="bool")
+
+        result = {}
+        result["input_counts"] = gene_counts
+        result["mask"] = ~self._pad_mask(gene_token_indices, dtype="bool")
+
+        if embed:
+            result["embeddings"] = mean_embeddings(gene_embeddings, pad_mask).detach().cpu()
+
+        return result

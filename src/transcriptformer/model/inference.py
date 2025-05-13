@@ -5,7 +5,6 @@ import anndata
 import pandas as pd
 import pytorch_lightning as pl
 import torch
-from hydra.utils import instantiate
 from pytorch_lightning.loggers import CSVLogger
 from torch.utils.data import DataLoader
 
@@ -41,10 +40,26 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
     # Load vocabs and embeddings
     (gene_vocab, aux_vocab), emb_matrix = load_vocabs_and_embeddings(cfg)
 
-    # Instantiate the model
-    logging.info("Instantiating the model")
-    model = instantiate(
-        cfg.model,
+    # Determine model class based on config
+    model_type = cfg.model.get("model_type", "transcriptformer")  # Default to transcriptformer if not set
+    if model_type == "esm2ce":
+        from transcriptformer.model.model import ESM2CE as ModelClass
+
+        logging.info("Instantiating ESM2CE model")
+    elif model_type == "transcriptformer":
+        from transcriptformer.model.model import Transcriptformer as ModelClass
+
+        logging.info("Instantiating Transcriptformer model")
+    else:
+        raise ValueError(f"Unknown model_type: {model_type}")
+
+    # Instantiate the selected model
+    logging.info(f"Instantiating the {model_type} model")
+    model = ModelClass(
+        data_config=cfg.model.data_config,
+        model_config=cfg.model.model_config,
+        loss_config=cfg.model.loss_config,
+        inference_config=cfg.model.inference_config,
         gene_vocab_dict=gene_vocab,
         aux_vocab_dict=aux_vocab,
         emb_matrix=emb_matrix,

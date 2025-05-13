@@ -134,6 +134,12 @@ def setup_inference_parser(subparsers):
         help="Whether to filter genes to only those in the vocabulary (default: True)",
     )
     parser.add_argument(
+        "--model-type",
+        default="transcriptformer",
+        choices=["transcriptformer", "esm2ce"],
+        help="Type of model to use for inference (default: transcriptformer)",
+    )
+    parser.add_argument(
         "--use-raw",
         type=lambda x: None if x.lower() == "auto" else x.lower() == "true",
         default=None,
@@ -186,6 +192,8 @@ def run_inference_cli(args):
         f"model.inference_config.output_path={args.output_path}",
         f"model.inference_config.output_filename={args.output_filename}",
         f"model.inference_config.precision={args.precision}",
+        f"model.inference_config.embedding_layer_index={args.embedding_layer_index}",
+        f"model.model_type={args.model_type}",
     ]
 
     # Add pretrained embedding if specified
