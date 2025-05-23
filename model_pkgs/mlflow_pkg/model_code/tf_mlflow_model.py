@@ -5,10 +5,11 @@ import mlflow.pyfunc
 
 
 class TranscriptformerMLflowModel(mlflow.pyfunc.PythonModel):
+    def __init__(self, model_variant: str):
+        self.model_variant = model_variant
+
     def load_context(self, context):
         self.checkpoint_path = context.artifacts["checkpoint_path"]
-        self.pretrained_embedding = context.artifacts["pretrained_embedding"]
-        self.model_variant = context.tags.get("model_variant", "unknown")
 
     def _get_default_batch_size(self) -> int:
         # Empirical defaults for Tesla T4
@@ -20,7 +21,7 @@ class TranscriptformerMLflowModel(mlflow.pyfunc.PythonModel):
             return 2
         return 16  # Safe fallback
 
-    def predict(self, context, model_input: str | Path, params: dict | None = None) -> dict[str, str]:
+    def predict(self, context, model_input, params=None):
         input_filepath = Path(model_input)
 
         if not input_filepath.is_file():
@@ -33,8 +34,7 @@ class TranscriptformerMLflowModel(mlflow.pyfunc.PythonModel):
         output_path = output_file.parent
         output_filename = output_file.name
 
-        # Handle batch size
-        batch_size = params.get("batch_size")
+        batch_size = params.get("batch_size", None)
         if batch_size is None:
             batch_size = self._get_default_batch_size()
         else:
@@ -42,6 +42,7 @@ class TranscriptformerMLflowModel(mlflow.pyfunc.PythonModel):
 
         gene_col_name = params.get("gene_col_name", "ensembl_id")
         precision = params.get("precision", "16-mixed")
+        pretrained_embedding = params.get("pretrained_embedding", None)
 
         cmd = [
             "transcriptformer",
@@ -60,10 +61,11 @@ class TranscriptformerMLflowModel(mlflow.pyfunc.PythonModel):
             gene_col_name,
             "--precision",
             precision,
-            "--pretrained-embedding",
-            str(self.pretrained_embedding),
         ]
+
+        if pretrained_embedding:
+            cmd.extend(["--pretrained-embedding", str(pretrained_embedding)])
 
         subprocess.run(cmd, check=True)
 
-        return {"output_file": str(output_file)}
+        return [{"output_file": str(output_file)}]
