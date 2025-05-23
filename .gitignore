@@ -180,3 +180,7 @@ figures/
 # hydra
 .hydra/
 new_env/
+
+#model packaging (mlflow)
+model_pkgs/mlflow_pkg/model_data/
+model_pkgs/mlflow_pkg/mlflow_models/
