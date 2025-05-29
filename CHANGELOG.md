@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/czi-ai/transcriptformer/compare/v0.2.1...v0.3.0) (2025-05-29)
+
+
+### Features
+
+* CGE inference support and ESM2-CE model (Resolves [#28](https://github.com/czi-ai/transcriptformer/issues/28)) ([#34](https://github.com/czi-ai/transcriptformer/issues/34)) ([35be080](https://github.com/czi-ai/transcriptformer/commit/35be0805b452d914acdf18bd43694356e92d58c4))
+
 ## [0.2.1](https://github.com/czi-ai/transcriptformer/compare/v0.2.0...v0.2.1) (2025-05-08)
 
 
