@@ -76,6 +76,31 @@ class TestInferenceCommand:
         args.precision = "16-mixed"
         args.pretrained_embedding = None
         args.config_override = []
+        args.model_type = "transcriptformer"
+        args.emb_type = "cell"
+
+        # Test that the function properly sets up Hydra config
+        original_argv = sys.argv.copy()
+        run_inference_cli(args)
+        mock_inference_main.assert_called_once()
+        # Check sys.argv was restored
+        assert sys.argv == original_argv
+
+    @mock.patch("transcriptformer.cli.inference.main")
+    def test_run_inference_cli_with_cge(self, mock_inference_main, monkeypatch):
+        """Test run_inference_cli function with CGE embedding type."""
+        args = mock.MagicMock()
+        args.checkpoint_path = "/path/to/checkpoint"
+        args.data_file = "/path/to/data.h5ad"
+        args.output_path = "./inference_results"
+        args.output_filename = "embeddings.h5ad"
+        args.batch_size = 8
+        args.gene_col_name = "ensembl_id"
+        args.precision = "16-mixed"
+        args.pretrained_embedding = None
+        args.config_override = []
+        args.model_type = "transcriptformer"
+        args.emb_type = "cge"
 
         # Test that the function properly sets up Hydra config
         original_argv = sys.argv.copy()
@@ -151,6 +176,14 @@ class TestCLIParsers:
             "--data-file",
             required=True,
             help="Path to input AnnData file to run inference on",
+        )
+
+        # Check that emb-type argument is added with correct choices
+        parser.add_argument.assert_any_call(
+            "--emb-type",
+            default="cell",
+            choices=["cell", "cge"],
+            help="Type of embeddings to extract: 'cell' for mean-pooled cell embeddings or 'cge' for contextual gene embeddings (default: cell)",
         )
 
     def test_download_parser_setup(self):

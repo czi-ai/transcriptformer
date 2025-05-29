@@ -130,6 +130,13 @@ transcriptformer inference \
   --data-file test/data/mouse_val.h5ad \
   --pretrained-embedding ./checkpoints/all_embeddings/mus_musculus_gene.h5 \
   --batch-size 8
+
+# Extract contextual gene embeddings instead of cell embeddings
+transcriptformer inference \
+  --checkpoint-path ./checkpoints/tf_sapiens \
+  --data-file test/data/human_val.h5ad \
+  --emb-type cge \
+  --batch-size 8
 ```
 
 You can also use the CLI it run inference on the ESM2-CE baseline model discussed in the paper:
@@ -175,6 +182,7 @@ transcriptformer download --help
 - `--use-raw {True,False,auto}`: Whether to use raw counts from `AnnData.raw.X` (True), `adata.X` (False), or auto-detect (auto/None) (default: None).
 - `--embedding-layer-index INT`: Index of the transformer layer to extract embeddings from (-1 for last layer, default: -1). Use with `transcriptformer` model type.
 - `--model-type {transcriptformer,esm2ce}`: Type of model to use (default: `transcriptformer`). Use `esm2ce` to extract raw ESM2-CE gene embeddings.
+- `--emb-type {cell,cge}`: Type of embeddings to extract (default: `cell`). Use `cell` for mean-pooled cell embeddings or `cge` for contextual gene embeddings.
 - `--config-override key.path=value`: Override any configuration value directly.
 
 ### Input Data Format and Preprocessing:
@@ -209,9 +217,57 @@ No other data preprocessing is necessary - the model handles all required transf
 
 The inference results will be saved to the specified output directory (default: `./inference_results`) in a file named `embeddings.h5ad`. This is an AnnData object where:
 
+**For cell embeddings (`--emb-type cell`, default):**
 - Cell embeddings are stored in `obsm['embeddings']`
 - Original cell metadata is preserved in the `obs` dataframe
 - Log-likelihood scores (if available) are stored in `uns['llh']`
+
+**For contextual gene embeddings (`--emb-type cge`):**
+- Contextual gene embeddings are stored in `uns['cge_embeddings']` as a 2D array (n_gene_instances, embedding_dim)
+- Cell indices for each gene embedding are stored in `uns['cge_cell_indices']`
+- Gene names for each embedding are stored in `uns['cge_gene_names']`
+- Original cell metadata is preserved in the `obs` dataframe
+- Log-likelihood scores (if available) are stored in `uns['llh']`
+
+#### Contextual Gene Embeddings (CGE)
+
+Contextual gene embeddings provide gene-specific representations that capture how each gene is contextualized within the cell sentence. Unlike cell embeddings which are mean-pooled across all genes, CGEs represent the individual embedding for each gene as computed by the transformer.
+
+Example usage:
+```bash
+# Extract contextual gene embeddings
+transcriptformer inference \
+  --checkpoint-path ./checkpoints/tf_sapiens \
+  --data-file test/data/human_val.h5ad \
+  --emb-type cge \
+  --output-filename cge_embeddings.h5ad
+```
+
+To access CGE data in Python:
+```python
+import anndata as ad
+import numpy as np
+
+# Load the results
+adata = ad.read_h5ad("./inference_results/cge_embeddings.h5ad")
+
+# Access all contextual gene embeddings
+cge_embeddings = adata.uns['cge_embeddings']  # Shape: (n_gene_instances, embedding_dim)
+cell_indices = adata.uns['cge_cell_indices']   # Which cell each embedding belongs to
+gene_names = adata.uns['cge_gene_names']       # Gene name for each embedding
+
+# Get all gene embeddings for the first cell (cell index 0)
+cell_0_mask = cell_indices == 0
+cell_0_embeddings = cge_embeddings[cell_0_mask]
+cell_0_genes = gene_names[cell_0_mask]
+
+# Get embedding for a specific gene in the first cell
+gene_mask = (cell_indices == 0) & (gene_names == 'ENSG00000000003')
+if np.any(gene_mask):
+    gene_embedding = cge_embeddings[gene_mask][0]  # Returns numpy array
+else:
+    gene_embedding = None  # Gene not found in this cell
+```
 
 For detailed configuration options, see the `src/transcriptformer/cli/conf/inference_config.yaml` file.
 

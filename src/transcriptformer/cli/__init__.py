@@ -145,6 +145,12 @@ def setup_inference_parser(subparsers):
         default=None,
         help="Whether to use raw counts from AnnData.raw.X (True), adata.X (False), or auto-detect (None/auto) (default: None)",
     )
+    parser.add_argument(
+        "--emb-type",
+        default="cell",
+        choices=["cell", "cge"],
+        help="Type of embeddings to extract: 'cell' for mean-pooled cell embeddings or 'cge' for contextual gene embeddings (default: cell)",
+    )
 
     # Allow arbitrary config overrides
     parser.add_argument(
@@ -193,6 +199,7 @@ def run_inference_cli(args):
         f"model.inference_config.output_filename={args.output_filename}",
         f"model.inference_config.precision={args.precision}",
         f"model.model_type={args.model_type}",
+        f"model.inference_config.emb_type={args.emb_type}",
     ]
 
     # Add pretrained embedding if specified

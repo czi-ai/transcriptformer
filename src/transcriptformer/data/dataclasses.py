@@ -177,6 +177,7 @@ class InferenceConfig:
         output_filename (str): Filename for the output embeddings (default: embeddings.h5ad)
         num_gpus_per_node (int): GPUs per node (default: 1)
         special_tokens (list): Special tokens to use
+        emb_type (str): Type of embeddings to extract - "cell" for mean-pooled cell embeddings or "cge" for contextual gene embeddings (default: "cell")
     """
 
     output_keys: list
@@ -191,6 +192,11 @@ class InferenceConfig:
     precision: str = "16-mixed"
     special_tokens: list = field(default_factory=list)
     pretrained_embedding: list = field(default_factory=list)
+    emb_type: str = "cell"
+
+    def __post_init__(self):
+        if self.emb_type not in {"cell", "cge"}:
+            raise ValueError("emb_type must be either 'cell' or 'cge'")
 
 
 @dataclass

@@ -22,6 +22,7 @@ model:
     load_checkpoint: null # Path to model weights file (automatically set by inference.py)
     pretrained_embedding: null # Path to pretrained embeddings for out-of-distribution species
     precision: 16-mixed # Numerical precision for inference (16-mixed, 32, etc.)
+    emb_type: cell # Type of embeddings to extract: "cell" for mean-pooled cell embeddings or "cge" for contextual gene embeddings
 
   data_config:
     _target_: transcriptformer.data.dataclasses.DataConfig
