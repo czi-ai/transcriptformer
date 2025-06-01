@@ -79,7 +79,7 @@ def download_and_extract(model_name: str, checkpoint_dir: str = "./checkpoints")
 
                 def report_hook(count, block_size, total_size):
                     """Callback function to report download progress."""
-                    if total_size > 0:
+                    if total_size > 0 and (count % 100 == 0 or count * block_size >= total_size):
                         print_progress(
                             count * block_size,
                             total_size,
