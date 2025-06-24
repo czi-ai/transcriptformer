@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/czi-ai/transcriptformer/compare/v0.3.0...v0.4.0) (2025-06-24)
+
+
+### Features
+
+* bulk download script for cxg discover ([#38](https://github.com/czi-ai/transcriptformer/issues/38)) ([2a65600](https://github.com/czi-ai/transcriptformer/commit/2a6560050fab579877565fa4480771485dd33a68))
+
+
+### Bug Fixes
+
+* pin dependencies versions ([#41](https://github.com/czi-ai/transcriptformer/issues/41)) ([30abf52](https://github.com/czi-ai/transcriptformer/commit/30abf52be08caba54a13aa0c7939667abbe883c3))
+
 ## [0.3.0](https://github.com/czi-ai/transcriptformer/compare/v0.2.1...v0.3.0) (2025-05-29)
 
 
