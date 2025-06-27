@@ -276,11 +276,11 @@ class AnnDataset(Dataset):
                         if gene not in seen:
                             seen.add(gene)
                             unique_indices.append(i)
-                    
+
                     # Filter adata to keep only unique genes
                     adata = adata[:, unique_indices].copy()
                     gene_names = gene_names[unique_indices]
-                    
+
                     logging.warning(
                         f"Removed {len(duplicates)} duplicate genes after removing version numbers. "
                         f"Kept first occurrence of each gene. "
