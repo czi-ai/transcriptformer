@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/czi-ai/transcriptformer/compare/v0.4.0...v0.4.1) (2025-07-08)
+
+
+### Bug Fixes
+
+* ood species cge generation bug; number of duplicate genes bug  ([#42](https://github.com/czi-ai/transcriptformer/issues/42)) ([89953a1](https://github.com/czi-ai/transcriptformer/commit/89953a14cce737ac18239125d1a5cfecd913916c))
+
 ## [0.4.0](https://github.com/czi-ai/transcriptformer/compare/v0.3.0...v0.4.0) (2025-06-24)
 
 

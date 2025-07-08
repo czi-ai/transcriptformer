@@ -5,7 +5,7 @@ requires = [ "hatchling" ]
 
 [project]
 name = "transcriptformer"
-version = "0.4.0"
+version = "0.4.1"
 description = "A transformer model for gene expression data"
 readme = "README.md"
 license = { text = "MIT" }
