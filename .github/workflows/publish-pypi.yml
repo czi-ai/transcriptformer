@@ -40,6 +40,9 @@ jobs:
       - name: Install uv
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
 
+      - name: Install HDF5
+        run: sudo apt-get update && sudo apt-get install -y libhdf5-dev
+
       - name: Install dependencies
         run: uv pip install --system --cache-dir ~/.cache/uv -e '.[build]'
 
