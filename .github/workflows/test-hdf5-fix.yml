@@ -22,10 +22,9 @@ jobs:
       - name: Install HDF5
         run: sudo apt-get update && sudo apt-get install -y libhdf5-dev
 
-      - name: Test h5py installation
-        run: |
-          uv pip install --system h5py==3.10.0
-          python -c "import h5py; print(f'h5py version: {h5py.__version__}')"
-
       - name: Test full dependencies
         run: uv pip install --system --cache-dir ~/.cache/uv -e '.[build]'
+
+      - name: Test h5py installation
+        run: |
+          python -c "import h5py; print(f'h5py version: {h5py.__version__}')"
