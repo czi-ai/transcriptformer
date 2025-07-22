@@ -1,7 +1,8 @@
 name: Test HDF5 Installation Fix
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [add-hdf5-dep]
 
 jobs:
   test-hdf5:
