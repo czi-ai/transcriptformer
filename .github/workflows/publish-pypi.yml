@@ -28,7 +28,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: 'pyproject.toml'
+          python-version: '3.11'
 
       - name: Cache python dependencies
         uses: actions/cache@v4
