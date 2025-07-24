@@ -3,7 +3,7 @@
 <p align="center">
   <img src="assets/model_overview.png" width="600" alt="TranscriptFormer Overview">
   <br>
-  <em>Overview of TranscriptFormer pretraining data (A), model (B), outputs (C) and downstream tasks (D).
+  <em>Overview of TranscriptFormer pretraining data, model, outputs and downstream tasks.
 </em>
 </p>
 
