@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.2](https://github.com/czi-ai/transcriptformer/compare/v0.4.1...v0.4.2) (2025-07-24)
+
+
+### Bug Fixes
+
+* update model overview figure ([#48](https://github.com/czi-ai/transcriptformer/issues/48)) ([047a0ea](https://github.com/czi-ai/transcriptformer/commit/047a0eab65d5feedb079c30ede4ad06cd720593f))
+* updated model overview figure ([6b5be7d](https://github.com/czi-ai/transcriptformer/commit/6b5be7d6b04dcda41295c9e7c82c6d7a1b8cd959))
+
 ## [0.4.1](https://github.com/czi-ai/transcriptformer/compare/v0.4.0...v0.4.1) (2025-07-08)
 
 
