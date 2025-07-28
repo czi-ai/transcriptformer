@@ -1,19 +1,20 @@
-import torch
-from esm import FastaBatchedDataset
-from esm.data import Alphabet
-import esm
-from pathlib import Path
-import numpy as np
-import pickle
-import os
 import argparse
-from Bio import SeqIO
+import gzip
 import json
 import logging
-import h5py
-import urllib.request
-import gzip
+import os
+import pickle
 import shutil
+import urllib.request
+from pathlib import Path
+
+import esm
+import h5py
+import numpy as np
+import torch
+from Bio import SeqIO
+from esm import FastaBatchedDataset
+from esm.data import Alphabet
 
 STABLE_ID_DIR = "gene_protein_stable_ids/"
 FASTA_MANIFEST = "fasta_manifest_pep.json"
@@ -39,7 +40,8 @@ def clean_sequence(seq: str):
     Args:
         seq (str): The input protein sequence.
 
-    Returns:
+    Returns
+    -------
         str: The cleaned protein sequence with asterisks replaced by <unk>.
     """
     return seq.replace("*", "<unk>")
@@ -53,7 +55,8 @@ def pad_batch(toks, num_gpus):
         toks (torch.Tensor): The tokenized sequences.
         num_gpus (int): The number of GPUs.
 
-    Returns:
+    Returns
+    -------
         torch.Tensor: The padded tokenized sequences.
     """
     batch_size = toks.size(0)
@@ -83,7 +86,8 @@ def generate_embeddings(
         seq_length (int, optional): Maximum sequence length for the embeddings. Defaults to 1022.
         batch_size (int, optional): Batch size for processing. Defaults to 16.
 
-    Returns:
+    Returns
+    -------
         None
     """
     save_dir = os.path.dirname(save_file)
@@ -117,16 +121,11 @@ def generate_embeddings(
 
                 out = model(toks, repr_layers=[33], return_contacts=False)
 
-                representations = {
-                    layer: t.to(device="cpu")
-                    for layer, t in out["representations"].items()
-                }
+                representations = {layer: t.to(device="cpu") for layer, t in out["representations"].items()}
 
                 for i, label in enumerate(labels):
                     truncate_len = min(seq_length, len(strs[i]))
-                    embedding = (
-                        representations[33][i, 1 : truncate_len + 1].mean(0).numpy()
-                    )
+                    embedding = representations[33][i, 1 : truncate_len + 1].mean(0).numpy()
 
                     entry_id = label.split()[0]
 
@@ -145,9 +144,7 @@ def generate_embeddings(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Generate protein embeddings and convert to gene embeddings."
-    )
+    parser = argparse.ArgumentParser(description="Generate protein embeddings and convert to gene embeddings.")
     parser.add_argument(
         "--output_dir",
         type=str,
@@ -177,13 +174,11 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     # Load FASTA URL manifest
-    with open(FASTA_MANIFEST, "r") as f:
+    with open(FASTA_MANIFEST) as f:
         fasta_urls = json.load(f)
 
     if args.organism_key not in fasta_urls:
-        raise ValueError(
-            f"Organism {args.organism_key} is not a valid organism in the fasta manifest"
-        )
+        raise ValueError(f"Organism {args.organism_key} is not a valid organism in the fasta manifest")
 
     # Create stable_id_dir if it doesn't exist
     stable_id_dir = Path(STABLE_ID_DIR)
@@ -215,12 +210,12 @@ def main():
         logging.info(f"Downloading FASTA for {organism}")
         # Download and decompress in one step using Python
         with urllib.request.urlopen(fasta_url) as response:
-            if response.headers.get('Content-Encoding') == 'gzip':
+            if response.headers.get("Content-Encoding") == "gzip":
                 with gzip.GzipFile(fileobj=response) as gz_file:
-                    with open(fasta_file, 'w') as out_file:
+                    with open(fasta_file, "w") as out_file:
                         shutil.copyfileobj(gz_file, out_file)
             else:
-                with open(fasta_file, 'w') as out_file:
+                with open(fasta_file, "w") as out_file:
                     shutil.copyfileobj(response, out_file)
 
     # Convert to gene IDs
@@ -228,24 +223,12 @@ def main():
     seen_names = set()
     for record in SeqIO.parse(fasta_file, "fasta"):
         if not args.use_large_model:
-            gene_id = (
-                record.description.split("gene:")[-1]
-                .split(" ")[0]
-                .strip()
-                .split(".")[0]
-            )
+            gene_id = record.description.split("gene:")[-1].split(" ")[0].strip().split(".")[0]
         else:
             if "gene_symbol" not in record.description:
-                gene_id = (
-                    record.description.split("gene:")[-1]
-                    .split(" ")[0]
-                    .strip()
-                    .split(".")[0]
-                )
+                gene_id = record.description.split("gene:")[-1].split(" ")[0].strip().split(".")[0]
             else:
-                gene_id = (
-                    record.description.split("gene_symbol:")[-1].split(" ")[0].strip()
-                )
+                gene_id = record.description.split("gene_symbol:")[-1].split(" ")[0].strip()
 
         if gene_id in seen_names:
             continue

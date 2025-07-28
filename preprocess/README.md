@@ -165,7 +165,7 @@ import h5py
 with h5py.File('homo_sapiens_gene.h5', 'r') as f:
     keys = f['keys'][:]  # Gene IDs
     embeddings = f['arrays']  # Group containing embedding arrays
-    
+
     # Access specific gene embedding
     gene_id = 'ENSG00000139618'  # Example: BRCA2
     embedding = embeddings[gene_id][:]  # Shape: (2560,) for ESM-2 3B model

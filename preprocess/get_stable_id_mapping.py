@@ -1,7 +1,8 @@
-import re
-import pandas as pd
 import os
+import re
 from itertools import product
+
+import pandas as pd
 
 
 def get_stable_id_mapping_from_gff3(
@@ -10,7 +11,7 @@ def get_stable_id_mapping_from_gff3(
     output_dir: str = "data/protein_embeddings/gene_protein_stable_ids",
 ):
     mapping_table = []
-    lines = open(gff3_file, "r").read().split("\n")
+    lines = open(gff3_file).read().split("\n")
 
     start_index = None
     end_index = None
@@ -58,7 +59,7 @@ def get_stable_id_mapping_from_gff3(
         i = end_index
 
     mapping_table = pd.DataFrame(mapping_table)
-    
+
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
     mapping_table.to_csv(f"{output_dir}/{organism_key}.tsv", sep="\t", index=False)
@@ -70,7 +71,7 @@ def get_stable_id_mapping_from_fasta(
     output_dir: str = "data/protein_embeddings/gene_protein_stable_ids",
 ):
     mapping_table = []
-    lines = open(fasta_file, "r").read().split("\n")
+    lines = open(fasta_file).read().split("\n")
 
     for line in lines:
         if line.startswith(">"):
@@ -89,6 +90,6 @@ def get_stable_id_mapping_from_fasta(
 
     mapping_table = pd.DataFrame(mapping_table)
 
-    # Create output directory if it doesn't exist  
+    # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
     mapping_table.to_csv(f"{output_dir}/{organism_key}.tsv", sep="\t", index=False)
