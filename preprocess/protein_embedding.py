@@ -136,7 +136,8 @@ def generate_embeddings(
                         embeddings[entry_id] = [embedding]
 
                 # Dump as we go just in case pipeline crashes
-                pickle.dump(embeddings, open(save_file, "wb"))
+                temp_save_file = save_file + ".tmp"
+                pickle.dump(embeddings, open(temp_save_file, "wb"))
 
     averaged_embeddings = {k: np.mean(v, axis=0) for k, v in embeddings.items()}
 
