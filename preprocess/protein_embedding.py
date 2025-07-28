@@ -214,9 +214,13 @@ def main():
         logging.info(f"Downloading FASTA for {organism}")
         # Download and decompress in one step using Python
         with urllib.request.urlopen(fasta_url) as response:
-            with gzip.open(response, 'rt') as gz_file:
+            if response.headers.get('Content-Encoding') == 'gzip':
+                with gzip.GzipFile(fileobj=response) as gz_file:
+                    with open(fasta_file, 'w') as out_file:
+                        shutil.copyfileobj(gz_file, out_file)
+            else:
                 with open(fasta_file, 'w') as out_file:
-                    shutil.copyfileobj(gz_file, out_file)
+                    shutil.copyfileobj(response, out_file)
 
     # Convert to gene IDs
     new_records = []
