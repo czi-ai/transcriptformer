@@ -168,8 +168,7 @@ def main():
     )
     parser.add_argument(
         "--use_large_model",
-        type=bool,
-        default=False,
+        action="store_true",
         help="Whether to use the large ESM-2 model",
     )
     args = parser.parse_args()
