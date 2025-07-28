@@ -3,7 +3,7 @@
 <p align="center">
   <img src="assets/model_overview.png" width="600" alt="TranscriptFormer Overview">
   <br>
-  <em>Overview of TranscriptFormer pretraining data (A), model (B), outputs (C) and downstream tasks (D).
+  <em>Overview of TranscriptFormer pretraining data, model, outputs and downstream tasks.
 </em>
 </p>
 
@@ -84,7 +84,7 @@ See the `pyproject.toml` file for the complete list of dependencies.
 
 ## Using the TranscriptFormer CLI
 
-After installing the package, you'll have access to the `transcriptformer` command-line interface (CLI), which provides easy access to download model artifacts and run inference.
+After installing the package, you'll have access to the `transcriptformer` command-line interface (CLI), which provides easy access to download model artifacts, download training datasets, and run inference.
 
 ### Downloading Model Weights
 
@@ -111,6 +111,60 @@ The command will download and extract the following files to the `./checkpoints`
 - `./checkpoints/tf_exemplar/`: Exemplar model weights
 - `./checkpoints/tf_metazoa/`: Metazoa model weights
 - `./checkpoints/all_embeddings/`: Embedding files for out-of-distribution species
+
+### Downloading Training Datasets
+
+Use the CLI to download single-cell RNA sequencing datasets from the CellxGene Discover portal:
+
+```bash
+# Download human datasets
+transcriptformer download-data --species "homo sapiens" --output-dir ./data/human
+
+# Download multiple species datasets
+transcriptformer download-data --species "homo sapiens,mus musculus" --output-dir ./data/multi_species
+
+# Download with custom settings
+transcriptformer download-data \
+  --species "homo sapiens" \
+  --output-dir ./data/human \
+  --processes 8 \
+  --max-retries 3 \
+  --no-metadata
+```
+
+The `download-data` command provides the following options:
+
+- `--species`: Comma-separated list of species to download (required). Common species names include:
+  - "homo sapiens" (human)
+  - "mus musculus" (mouse)
+  - "danio rerio" (zebrafish)
+  - "drosophila melanogaster" (fruit fly)
+  - "caenorhabditis elegans" (C. elegans)
+- `--output-dir`: Directory where datasets will be saved (default: `./data/cellxgene`)
+- `--processes`: Number of parallel download processes (default: 4)
+- `--max-retries`: Maximum retry attempts per dataset (default: 5)
+- `--no-metadata`: Skip saving dataset metadata to JSON file
+
+**Note:** You can also use the module directly for programmatic access:
+```python
+# Direct module usage
+python -m transcriptformer.data.bulk_download --species "homo sapiens" --output-dir ./data/human
+```
+
+**Downloaded Data Structure:**
+```
+output_dir/
+├── dataset_metadata.json          # Metadata for all downloaded datasets
+├── dataset_id_1/
+│   ├── full.h5ad                  # Raw dataset in AnnData format
+│   └── __success__                # Download completion marker
+├── dataset_id_2/
+│   ├── full.h5ad
+│   └── __success__
+└── ...
+```
+
+Each dataset is downloaded as an AnnData object in H5AD format, containing raw count data suitable for use with TranscriptFormer models. The metadata JSON file contains detailed information about each dataset including cell counts, tissue types, and experimental conditions.
 
 ### Running Inference
 
@@ -165,6 +219,7 @@ To see all available CLI options:
 ```bash
 transcriptformer inference --help
 transcriptformer download --help
+transcriptformer download-data --help
 ```
 
 ### CLI Options for `inference`:

@@ -35,3 +35,4 @@ model:
     randomize_genes: false # Whether to randomize gene order
     min_expressed_genes: 0 # Minimum number of expressed genes required per cell
     use_raw: "auto" # Whether to use .raw.X (True), .X (False), or auto-detect (auto/null)
+    remove_duplicate_genes: false # Whether to remove duplicate genes instead of raising an error

@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.4.2](https://github.com/czi-ai/transcriptformer/compare/v0.4.1...v0.4.2) (2025-07-24)
+
+
+### Bug Fixes
+
+* update model overview figure ([#48](https://github.com/czi-ai/transcriptformer/issues/48)) ([047a0ea](https://github.com/czi-ai/transcriptformer/commit/047a0eab65d5feedb079c30ede4ad06cd720593f))
+* updated model overview figure ([6b5be7d](https://github.com/czi-ai/transcriptformer/commit/6b5be7d6b04dcda41295c9e7c82c6d7a1b8cd959))
+
+## [0.4.1](https://github.com/czi-ai/transcriptformer/compare/v0.4.0...v0.4.1) (2025-07-08)
+
+
+### Bug Fixes
+
+* ood species cge generation bug; number of duplicate genes bug  ([#42](https://github.com/czi-ai/transcriptformer/issues/42)) ([89953a1](https://github.com/czi-ai/transcriptformer/commit/89953a14cce737ac18239125d1a5cfecd913916c))
+
+## [0.4.0](https://github.com/czi-ai/transcriptformer/compare/v0.3.0...v0.4.0) (2025-06-24)
+
+
+### Features
+
+* bulk download script for cxg discover ([#38](https://github.com/czi-ai/transcriptformer/issues/38)) ([2a65600](https://github.com/czi-ai/transcriptformer/commit/2a6560050fab579877565fa4480771485dd33a68))
+
+
+### Bug Fixes
+
+* pin dependencies versions ([#41](https://github.com/czi-ai/transcriptformer/issues/41)) ([30abf52](https://github.com/czi-ai/transcriptformer/commit/30abf52be08caba54a13aa0c7939667abbe883c3))
+
 ## [0.3.0](https://github.com/czi-ai/transcriptformer/compare/v0.2.1...v0.3.0) (2025-05-29)
 
 

@@ -59,7 +59,7 @@ class Transcriptformer(pl.LightningModule):
         self.inference_config = inference_config
 
         # initialize vocab dicts
-        self.gene_vocab_dict = gene_vocab_dict
+        self._gene_vocab_dict = gene_vocab_dict  # Store original for initialization only
         self.aux_vocab_dict = aux_vocab_dict
 
         # Load vocabularies and initialize model components
@@ -70,12 +70,12 @@ class Transcriptformer(pl.LightningModule):
     def _build_vocabs(self):
         # Load the gene vocabulary
         self.gene_vocab = GeneVocab(
-            vocab_dict=self.gene_vocab_dict,
-            vocab_size=len(self.gene_vocab_dict),
-            pad_idx=self.gene_vocab_dict["[PAD]"],
-            start_idx=self.gene_vocab_dict.get("[START]"),
-            end_idx=self.gene_vocab_dict.get("[END]"),
-            cell_idx=self.gene_vocab_dict.get("[CELL]"),
+            vocab_dict=self._gene_vocab_dict,
+            vocab_size=len(self._gene_vocab_dict),
+            pad_idx=self._gene_vocab_dict["[PAD]"],
+            start_idx=self._gene_vocab_dict.get("[START]"),
+            end_idx=self._gene_vocab_dict.get("[END]"),
+            cell_idx=self._gene_vocab_dict.get("[CELL]"),
             embedding_matrix=None,
         )
         # Load the auxiliary vocab if provided
@@ -229,7 +229,7 @@ class Transcriptformer(pl.LightningModule):
         cge_dicts = []
 
         # Create reverse mapping from token index to gene name
-        idx_to_gene = {idx: gene for gene, idx in self.gene_vocab_dict.items()}
+        idx_to_gene = {idx: gene for gene, idx in self.gene_vocab.vocab_dict.items()}
 
         for i in range(batch_size):
             cell_dict = {}
@@ -470,6 +470,11 @@ class Transcriptformer(pl.LightningModule):
     def predict_step(self, batch, batch_idx):
         assert self.inference_config.output_keys, "output_keys must be set in inference_config"
         return self.inference(batch)
+
+    @property
+    def gene_vocab_dict(self):
+        """Always return the current gene vocabulary dictionary."""
+        return self.gene_vocab.vocab_dict if hasattr(self, "gene_vocab") else self._gene_vocab_dict
 
 
 class ESM2CE(Transcriptformer):

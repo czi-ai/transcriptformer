@@ -117,6 +117,7 @@ class DataConfig:
         special_tokens (List[str]): Special tokens
         esm2_mappings_path (str): Path to ESM2 mappings
         mproc_context (str): Multiprocessing context
+        remove_duplicate_genes (bool): Whether to remove duplicate genes instead of raising an error (default: False)
     """
 
     # Required fields
@@ -143,6 +144,7 @@ class DataConfig:
     use_raw: bool | None = (
         None  # If True, use adata.raw.X, if False use adata.X, if None try raw first then fallback to X
     )
+    remove_duplicate_genes: bool = False  # Whether to remove duplicate genes instead of raising an error
 
 
 # Parameters that control the loss function

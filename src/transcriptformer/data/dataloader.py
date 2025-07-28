@@ -1,6 +1,7 @@
 import logging
 import os
 import random
+from collections import Counter
 
 import anndata
 import numpy as np
@@ -176,6 +177,7 @@ class AnnDataset(Dataset):
         inference: bool = False,
         obs_keys: list[str] = None,
         use_raw: bool = None,
+        remove_duplicate_genes: bool = False,
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -197,6 +199,7 @@ class AnnDataset(Dataset):
         self.inference = inference
         self.obs_keys = obs_keys
         self.use_raw = use_raw
+        self.remove_duplicate_genes = remove_duplicate_genes
 
         self.gene_tokenizer = BatchGeneTokenizer(gene_vocab)
         if aux_vocab is not None:
@@ -262,22 +265,35 @@ class AnnDataset(Dataset):
             gene_names = np.array([id.split(".")[0] for id in gene_names])
 
             # Check for duplicates after removing version numbers
-            unique_genes = set(gene_names)
-            if len(unique_genes) != len(gene_names):
-                duplicates = set()
-                for gene in gene_names:
-                    if gene in unique_genes:
-                        duplicates.add(gene)
+            gene_counts = Counter(gene_names)
+            duplicates = {gene for gene, count in gene_counts.items() if count > 1}
+            if len(duplicates) > 0:
+                if self.remove_duplicate_genes:
+                    # Remove duplicates by keeping only the first occurrence
+                    seen = set()
+                    unique_indices = []
+                    for i, gene in enumerate(gene_names):
+                        if gene not in seen:
+                            seen.add(gene)
+                            unique_indices.append(i)
 
-                raise ValueError(
-                    f"Found {len(duplicates)} duplicate genes after removing version numbers. "
-                    f"Please remove duplicate genes from your data. "
-                    f"Duplicates Found: {list(duplicates)}"
-                )
+                    # Filter adata to keep only unique genes
+                    adata = adata[:, unique_indices].copy()
+                    gene_names = gene_names[unique_indices]
 
-            return gene_names, True
+                    logging.warning(
+                        f"Removed {len(duplicates)} duplicate genes after removing version numbers. "
+                        f"Kept first occurrence of each gene. "
+                    )
+                else:
+                    raise ValueError(
+                        f"Found {len(duplicates)} duplicate genes after removing version numbers. "
+                        f"Please remove duplicate genes from your data or use --remove-duplicate-genes flag. "
+                    )
+
+            return gene_names, True, adata
         except KeyError:
-            return None, False
+            return None, False, adata
 
     def _get_batch_from_file(self, file: str | anndata.AnnData) -> BatchData | None:
         if isinstance(file, str):
@@ -297,7 +313,7 @@ class AnnDataset(Dataset):
             logging.error(f"Failed to load data from {file_path}")
             return None
 
-        gene_names, success = self._load_gene_features(adata)
+        gene_names, success, adata = self._load_gene_features(adata)
         if not success:
             logging.error(f"Failed to load gene features from {file_path}")
             return None

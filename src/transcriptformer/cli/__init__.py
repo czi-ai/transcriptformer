@@ -3,15 +3,17 @@
 """
 TranscriptFormer CLI
 
-A command-line interface for TranscriptFormer model inference and artifact downloads.
+A command-line interface for TranscriptFormer model inference, artifact downloads, and data downloads.
 
 Usage:
     transcriptformer inference --checkpoint-path PATH --data-file PATH [OPTIONS]
     transcriptformer download MODEL [--checkpoint-dir DIR]
+    transcriptformer download-data --species SPECIES [OPTIONS]
 
 Commands:
-    inference     Run inference with a TranscriptFormer model
-    download      Download and extract TranscriptFormer model artifacts
+    inference      Run inference with a TranscriptFormer model
+    download       Download and extract TranscriptFormer model artifacts
+    download-data  Download CellxGene Discover datasets by species
 
 Common Options for Inference:
     --checkpoint-path      Path to model checkpoint directory (required)
@@ -52,6 +54,11 @@ Examples
 import argparse
 import logging
 import sys
+import warnings
+
+# Suppress annoying warnings
+warnings.filterwarnings("ignore", category=FutureWarning, module="anndata")
+warnings.filterwarnings("ignore", category=FutureWarning, message=".*read_.*from.*anndata.*deprecated.*")
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -151,6 +158,12 @@ def setup_inference_parser(subparsers):
         choices=["cell", "cge"],
         help="Type of embeddings to extract: 'cell' for mean-pooled cell embeddings or 'cge' for contextual gene embeddings (default: cell)",
     )
+    parser.add_argument(
+        "--remove-duplicate-genes",
+        action="store_true",
+        default=False,
+        help="Remove duplicate genes if found instead of raising an error (default: False)",
+    )
 
     # Allow arbitrary config overrides
     parser.add_argument(
@@ -183,6 +196,50 @@ def setup_download_parser(subparsers):
     )
 
 
+def setup_download_data_parser(subparsers):
+    """Setup the parser for the download-data command."""
+    parser = subparsers.add_parser(
+        "download-data",
+        help="Download CellxGene Discover datasets by species",
+        description="Download single-cell RNA sequencing datasets from the CellxGene Discover portal filtered by species.",
+    )
+
+    # Required arguments
+    parser.add_argument(
+        "--species",
+        help="Comma-separated list of species to download (e.g., 'homo sapiens,mus musculus'). Required unless using --test-only.",
+    )
+
+    # Optional arguments
+    parser.add_argument(
+        "--output-dir",
+        default="./data/cellxgene",
+        help="Directory where datasets will be saved (default: ./data/cellxgene)",
+    )
+    parser.add_argument(
+        "--processes",
+        type=int,
+        default=4,
+        help="Number of parallel processes for downloading (default: 4)",
+    )
+    parser.add_argument(
+        "--max-retries",
+        type=int,
+        default=5,
+        help="Maximum number of retry attempts per dataset (default: 5)",
+    )
+    parser.add_argument(
+        "--no-metadata",
+        action="store_true",
+        help="Skip saving dataset metadata to JSON file",
+    )
+    parser.add_argument(
+        "--test-only",
+        action="store_true",
+        help="Only test API connectivity, don't download datasets",
+    )
+
+
 def run_inference_cli(args):
     """Run inference using command line arguments."""
     # Import the inference module directly
@@ -200,6 +257,7 @@ def run_inference_cli(args):
         f"model.inference_config.precision={args.precision}",
         f"model.model_type={args.model_type}",
         f"model.inference_config.emb_type={args.emb_type}",
+        f"model.data_config.remove_duplicate_genes={args.remove_duplicate_genes}",
     ]
 
     # Add pretrained embedding if specified
@@ -248,6 +306,51 @@ def run_download_cli(args):
         download_and_extract(models[args.model], args.checkpoint_dir)
 
 
+def run_download_data_cli(args):
+    """Run download-data using command line arguments."""
+    # Import the download_data module
+    from transcriptformer.cli.download_data import main as download_data_main
+
+    # Validate arguments
+    if not args.test_only and not args.species:
+        print("❌ Error: --species is required unless using --test-only")
+        sys.exit(1)
+
+    # Parse species list
+    species_list = [s.strip() for s in args.species.split(",")] if args.species else []
+
+    # Print logo
+    print(TF_LOGO)
+
+    # Run the download
+    try:
+        successful_downloads = download_data_main(
+            species=species_list,
+            output_dir=args.output_dir,
+            n_processes=args.processes,
+            max_retries=args.max_retries,
+            save_metadata=not args.no_metadata,
+            test_only=args.test_only,
+        )
+
+        if args.test_only:
+            if successful_downloads:
+                print("\n✅ API connectivity test passed!")
+            else:
+                print("\n❌ API connectivity test failed.")
+        else:
+            if successful_downloads > 0:
+                print(f"\n✅ Successfully downloaded {successful_downloads} datasets to {args.output_dir}")
+            else:
+                print("\n⚠️  No datasets were downloaded. Check the species names and try again.")
+
+    except Exception as e:
+        print(f"\n❌ Download failed: {e}")
+        if not args.test_only:
+            print("💡 Try running with --test-only to check API connectivity first")
+        sys.exit(1)
+
+
 def main():
     """Main entry point for the CLI."""
     parser = argparse.ArgumentParser(
@@ -260,6 +363,7 @@ def main():
     # Set up parsers for each command
     setup_inference_parser(subparsers)
     setup_download_parser(subparsers)
+    setup_download_data_parser(subparsers)
 
     # Parse arguments
     args = parser.parse_args()
@@ -273,6 +377,8 @@ def main():
         run_inference_cli(args)
     elif args.command == "download":
         run_download_cli(args)
+    elif args.command == "download-data":
+        run_download_data_cli(args)
 
 
 if __name__ == "__main__":

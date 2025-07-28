@@ -111,6 +111,7 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
         "min_expressed_genes": cfg.model.data_config.min_expressed_genes,
         "clip_counts": cfg.model.data_config.clip_counts,
         "obs_keys": cfg.model.inference_config.obs_keys,
+        "remove_duplicate_genes": cfg.model.data_config.remove_duplicate_genes,
     }
     dataset = AnnDataset(data_files, **data_kwargs)
 

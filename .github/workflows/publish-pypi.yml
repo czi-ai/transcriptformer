@@ -28,7 +28,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: 'pyproject.toml'
+          python-version: '3.11'
 
       - name: Cache python dependencies
         uses: actions/cache@v4
@@ -39,6 +39,9 @@ jobs:
 
       - name: Install uv
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install HDF5
+        run: sudo apt-get update && sudo apt-get install -y libhdf5-dev
 
       - name: Install dependencies
         run: uv pip install --system --cache-dir ~/.cache/uv -e '.[build]'
