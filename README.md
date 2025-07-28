@@ -3,7 +3,7 @@
 <p align="center">
   <img src="assets/model_overview.png" width="600" alt="TranscriptFormer Overview">
   <br>
-  <em>Overview of TranscriptFormer pretraining data, model, outputs and downstream tasks.
+  <em>Overview of TranscriptFormer pretraining data (A), model (B), outputs (C) and downstream tasks (D).
 </em>
 </p>
 
@@ -111,6 +111,49 @@ The command will download and extract the following files to the `./checkpoints`
 - `./checkpoints/tf_exemplar/`: Exemplar model weights
 - `./checkpoints/tf_metazoa/`: Metazoa model weights
 - `./checkpoints/all_embeddings/`: Embedding files for out-of-distribution species
+
+#### Available Protein Embeddings
+
+The following protein embeddings are available for download with `transcriptformer download all-embeddings`:
+
+| Scientific Name | Common Name | TF-Metazoa | TF-Exemplar | TF-Sapiens | Notes |
+|-----------------|-------------|------------|-------------|------------|-------|
+| *Homo sapiens* | Human | ✓ | ✓ | ✓ | Primary training species |
+| *Mus musculus* | Mouse | ✓ | ✓ | - | Model organism |
+| *Danio rerio* | Zebrafish | ✓ | ✓ | - | Model organism |
+| *Drosophila melanogaster* | Fruit fly | ✓ | ✓ | - | Model organism |
+| *Caenorhabditis elegans* | C. elegans | ✓ | ✓ | - | Model organism |
+| *Oryctolagus cuniculus* | Rabbit | ✓ | - | - | Vertebrate |
+| *Gallus gallus* | Chicken | ✓ | - | - | Vertebrate |
+| *Xenopus laevis* | African clawed frog | ✓ | - | - | Vertebrate |
+| *Lytechinus variegatus* | Sea urchin | ✓ | - | - | Invertebrate |
+| *Spongilla lacustris* | Freshwater sponge | ✓ | - | - | Invertebrate |
+| *Saccharomyces cerevisiae* | Yeast | ✓ | - | - | Fungus |
+| *Plasmodium falciparum* | Malaria parasite | ✓ | - | - | Protist |
+| *Rattus norvegicus* | Rat | - | - | - | Out-of-distribution |
+| *Sus scrofa* | Pig | - | - | - | Out-of-distribution |
+| *Pan troglodytes* | Chimpanzee | - | - | - | Out-of-distribution |
+| *Gorilla gorilla* | Gorilla | - | - | - | Out-of-distribution |
+| *Macaca mulatta* | Rhesus macaque | - | - | - | Out-of-distribution |
+| *Callithrix jacchus* | Marmoset | - | - | - | Out-of-distribution |
+| *Xenopus tropicalis* | Western clawed frog | - | - | - | Out-of-distribution |
+| *Ornithorhynchus anatinus* | Platypus | - | - | - | Out-of-distribution |
+| *Monodelphis domestica* | Opossum | - | - | - | Out-of-distribution |
+| *Heterocephalus glaber* | Naked mole-rat | - | - | - | Out-of-distribution |
+| *Petromyzon marinus* | Sea lamprey | - | - | - | Out-of-distribution |
+| *Stylophora pistillata* | Coral | - | - | - | Out-of-distribution |
+
+**Legend:**
+- ✓ = Species included in model training data
+- \- = Species not included in model training (out-of-distribution)
+
+### Generating Protein Embeddings for New Species
+
+The pre-generated embeddings cover the most commonly used species. If you need to work with a species not included in the downloaded embeddings, you can generate protein embeddings using the ESM-2 models.
+
+**Note**: This is only necessary for new species that don't have pre-generated embeddings available for download.
+
+For detailed instructions on generating protein embeddings for additional species, see the [protein_embeddings/README.md](protein_embeddings/README.md) documentation.
 
 ### Downloading Training Datasets
 

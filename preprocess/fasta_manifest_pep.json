@@ -1,0 +1,63 @@
+{
+  "homo_sapiens": {
+    "fa": "https://ftp.ensembl.org/pub/release-110/fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz"
+  },
+  "mus_musculus": {
+    "fa": "https://ftp.ensembl.org/pub/release-110/fasta/mus_musculus/pep/Mus_musculus.GRCm39.pep.all.fa.gz"
+  },
+  "danio_rerio": {
+    "fa": "https://ftp.ensembl.org/pub/release-110/fasta/danio_rerio/pep/Danio_rerio.GRCz11.pep.all.fa.gz"
+  },
+  "callithrix_jacchus": {
+    "fa": "https://ftp.ensembl.org/pub/release-110/fasta/callithrix_jacchus/pep/Callithrix_jacchus.mCalJac1.pat.X.pep.all.fa.gz"
+  },
+  "gorilla_gorilla": {
+    "fa": "https://ftp.ensembl.org/pub/release-110/fasta/gorilla_gorilla/pep/Gorilla_gorilla.gorGor4.pep.all.fa.gz"
+  },
+  "macaca_mulatta": {
+    "fa": "https://ftp.ensembl.org/pub/release-110/fasta/macaca_mulatta/pep/Macaca_mulatta.Mmul_10.pep.all.fa.gz"
+  },
+  "sus_scrofa": {
+    "fa": "https://ftp.ensembl.org/pub/release-110/fasta/sus_scrofa/pep/Sus_scrofa.Sscrofa11.1.pep.all.fa.gz"
+  },
+  "pan_troglodytes": {
+    "fa": "https://ftp.ensembl.org/pub/release-110/fasta/pan_troglodytes/pep/Pan_troglodytes.Pan_tro_3.0.pep.all.fa.gz"
+  },
+  "gallus_gallus": {
+    "fa": "https://ftp.ensembl.org/pub/release-113/fasta/gallus_gallus/pep/Gallus_gallus.bGalGal1.mat.broiler.GRCg7b.pep.all.fa.gz"
+  },
+  "heterocephalus_glaber": {
+    "fa": "https://ftp.ensembl.org/pub/release-113/fasta/heterocephalus_glaber_female/pep/Heterocephalus_glaber_female.Naked_mole-rat_maternal.pep.all.fa.gz"
+  },
+  "monodelphis_domestica": {
+    "fa": "https://ftp.ensembl.org/pub/release-113/fasta/monodelphis_domestica/pep/Monodelphis_domestica.ASM229v1.pep.all.fa.gz"
+  },
+  "drosophila_melanogaster": {
+    "fa": "https://ftp.ensembl.org/pub/release-113/fasta/drosophila_melanogaster/pep/Drosophila_melanogaster.BDGP6.46.pep.all.fa.gz"
+  },
+  "ornithorhynchus_anatinus": {
+    "fa": "https://ftp.ensembl.org/pub/release-113/fasta/ornithorhynchus_anatinus/pep/Ornithorhynchus_anatinus.mOrnAna1.p.v1.pep.all.fa.gz",
+    "gff3": "https://ftp.ensembl.org/pub/release-113/gff3/ornithorhynchus_anatinus/Ornithorhynchus_anatinus.mOrnAna1.p.v1.113.gff3.gz"
+  },
+  "oryctolagus_cuniculus": {
+    "fa": "https://ftp.ensembl.org/pub/release-113/fasta/oryctolagus_cuniculus/pep/Oryctolagus_cuniculus.OryCun2.0.pep.all.fa.gz",
+    "gff3": "https://ftp.ensembl.org/pub/release-113/gff3/oryctolagus_cuniculus/Oryctolagus_cuniculus.OryCun2.0.113.gff3.gz"
+  },
+  "xenopus_tropicalis": {
+    "fa": "https://ftp.ensembl.org/pub/release-113/fasta/xenopus_tropicalis/pep/Xenopus_tropicalis.UCB_Xtro_10.0.pep.all.fa.gz",
+    "gff3": "https://ftp.ensembl.org/pub/release-113/gff3/xenopus_tropicalis/Xenopus_tropicalis.UCB_Xtro_10.0.113.gff3.gz"
+  },
+  "microcebus_murinus": {
+    "fa": "https://ftp.ensembl.org/pub/release-113/fasta/microcebus_murinus/pep/Microcebus_murinus.Mmur_3.0.pep.all.fa.gz",
+    "gff3": "https://ftp.ensembl.org/pub/release-113/gff3/microcebus_murinus/Microcebus_murinus.Mmur_3.0.113.chr.gff3.gz"
+  },
+  "stylophora_pistillata": {
+    "fa": "https://ftp.ebi.ac.uk/ensemblgenomes/pub/release-60/metazoa/fasta/stylophora_pistillata_gca002571385v1/pep/Stylophora_pistillata_gca002571385v1.Stylophora_pistillata_v1.pep.all.fa.gz"
+  },
+  "petromyzon_marinus": {
+    "fa": "https://ftp.ensembl.org/pub/release-113/fasta/petromyzon_marinus/pep/Petromyzon_marinus.Pmarinus_7.0.pep.all.fa.gz"
+  },
+  "rattus_norvegicus": {
+    "fa": "https://ftp.ensembl.org/pub/release-113/fasta/rattus_norvegicus/pep/Rattus_norvegicus.mRatBN7.2.pep.all.fa.gz"
+  }
+}
