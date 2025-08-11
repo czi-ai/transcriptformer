@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/czi-ai/transcriptformer/compare/v0.4.2...v0.5.0) (2025-08-11)
+
+
+### Features
+
+* added ESM-2 preprocessing pipeline ([#49](https://github.com/czi-ai/transcriptformer/issues/49)) ([181193c](https://github.com/czi-ai/transcriptformer/commit/181193c13ad71bffeb7f82d01336760bfbd01ee8))
+
 ## [0.4.2](https://github.com/czi-ai/transcriptformer/compare/v0.4.1...v0.4.2) (2025-07-24)
 
 
