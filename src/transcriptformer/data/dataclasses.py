@@ -178,6 +178,7 @@ class InferenceConfig:
         output_path (str): Path to save outputs
         output_filename (str): Filename for the output embeddings (default: embeddings.h5ad)
         num_gpus_per_node (int): GPUs per node (default: 1)
+        num_gpus (int): Number of GPUs to use for inference (1 = single GPU, -1 = all available GPUs, >1 = specific number) (default: 1)
         special_tokens (list): Special tokens to use
         emb_type (str): Type of embeddings to extract - "cell" for mean-pooled cell embeddings or "cge" for contextual gene embeddings (default: "cell")
     """
@@ -190,6 +191,7 @@ class InferenceConfig:
     output_path: str | None
     output_filename: str | None = "embeddings.h5ad"
     num_gpus_per_node: int = 1
+    num_gpus: int = 1
     num_nodes: int = 1
     precision: str = "16-mixed"
     special_tokens: list = field(default_factory=list)
