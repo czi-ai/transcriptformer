@@ -284,6 +284,7 @@ def run_inference_cli(args):
     cfg.model.model_type = args.model_type
     cfg.model.inference_config.emb_type = args.emb_type
     cfg.model.data_config.remove_duplicate_genes = args.remove_duplicate_genes
+    cfg.model.data_config.use_raw = args.use_raw
     cfg.model.inference_config.num_gpus = args.num_gpus
     
     # Add pretrained embedding if specified
