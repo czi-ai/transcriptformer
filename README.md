@@ -277,6 +277,8 @@ transcriptformer download-data --help
 - `--pretrained-embedding PATH`: Path to pretrained embeddings for out-of-distribution species.
 - `--clip-counts INT`: Maximum count value (higher values will be clipped) (default: 30).
 - `--filter-to-vocabs`: Whether to filter genes to only those in the vocabulary (default: True).
+- `--use-iterable-dataset`: Use a streaming IterableDataset for low-memory processing; yields cells on-the-fly (default: False). 
+- `--iterable-chunk-size INT`: Optional chunk size (number of cells) processed per step when using the iterable dataset. 
 - `--use-raw {True,False,auto}`: Whether to use raw counts from `AnnData.raw.X` (True), `adata.X` (False), or auto-detect (auto/None) (default: None).
 - `--embedding-layer-index INT`: Index of the transformer layer to extract embeddings from (-1 for last layer, default: -1). Use with `transcriptformer` model type.
 - `--model-type {transcriptformer,esm2ce}`: Type of model to use (default: `transcriptformer`). Use `esm2ce` to extract raw ESM2-CE gene embeddings.
@@ -300,6 +302,17 @@ Input data files should be in H5AD format (AnnData objects) with the following r
   - `None` (default): Try `adata.raw.X` first, then fall back to `adata.X`
   - `True`: Use only `adata.raw.X`
   - `False`: Use only `adata.X`
+
+ - **Streaming Inference**:
+   - To reduce peak memory usage on large datasets, enable streaming:
+     ```bash
+     transcriptformer inference \
+       --checkpoint-path ./checkpoints/tf_sapiens \
+       --data-file ./data/huge.h5ad \
+       --use-iterable-dataset \
+       --iterable-chunk-size 4096
+     ```
+   - This uses an IterableDataset that processes cells in chunks and yields items to the DataLoader without loading all cells into memory.
 
 - **Count Processing**:
   - Count values are clipped at 30 by default (as was done in training)

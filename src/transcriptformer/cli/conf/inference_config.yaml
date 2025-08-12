@@ -23,6 +23,8 @@ model:
     pretrained_embedding: null # Path to pretrained embeddings for out-of-distribution species
     precision: 16-mixed # Numerical precision for inference (16-mixed, 32, etc.)
     emb_type: cell # Type of embeddings to extract: "cell" for mean-pooled cell embeddings or "cge" for contextual gene embeddings
+    use_iterable_dataset: false # Use streaming IterableDataset for low-memory processing
+    iterable_chunk_size: 4096 # Chunk size (rows per step) when using iterable dataset
 
   data_config:
     _target_: transcriptformer.data.dataclasses.DataConfig

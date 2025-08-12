@@ -164,6 +164,18 @@ def setup_inference_parser(subparsers):
         default=False,
         help="Remove duplicate genes if found instead of raising an error (default: False)",
     )
+    parser.add_argument(
+        "--use-iterable-dataset",
+        action="store_true",
+        default=False,
+        help="Use streaming IterableDataset for low-memory processing (default: False)",
+    )
+    parser.add_argument(
+        "--iterable-chunk-size",
+        type=int,
+        default=4096,
+        help="Chunk size of rows per processing step when using the iterable dataset (default: auto)",
+    )
 
     # Allow arbitrary config overrides
     parser.add_argument(
@@ -258,7 +270,16 @@ def run_inference_cli(args):
         f"model.model_type={args.model_type}",
         f"model.inference_config.emb_type={args.emb_type}",
         f"model.data_config.remove_duplicate_genes={args.remove_duplicate_genes}",
+        f"model.inference_config.use_iterable_dataset={args.use_iterable_dataset}",
+        f"model.data_config.use_raw={args.use_raw}",
+        f"model.data_config.clip_counts={args.clip_counts}",
+        f"model.data_config.filter_to_vocabs={args.filter_to_vocabs}",
+        
     ]
+
+    # Only pass iterable_chunk_size if explicitly provided (not None)
+    # Always pass explicit chunk size (has default)
+    cmd.append(f"model.inference_config.iterable_chunk_size={args.iterable_chunk_size}")
 
     # Add pretrained embedding if specified
     if args.pretrained_embedding:
@@ -268,6 +289,7 @@ def run_inference_cli(args):
     for override in args.config_override:
         cmd.append(override)
 
+    print("USE RAW", args.use_raw, type(args.use_raw))
     # Print logo
     print(TF_LOGO)
 

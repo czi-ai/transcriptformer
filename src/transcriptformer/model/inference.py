@@ -9,7 +9,7 @@ import torch
 from pytorch_lightning.loggers import CSVLogger
 from torch.utils.data import DataLoader
 
-from transcriptformer.data.dataloader import AnnDataset
+from transcriptformer.data.dataloader import AnnDataset, StreamingAnnDataset
 from transcriptformer.model.embedding_surgery import change_embedding_layer
 from transcriptformer.tokenizer.vocab import load_vocabs_and_embeddings
 from transcriptformer.utils.utils import stack_dict
@@ -112,8 +112,16 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
         "clip_counts": cfg.model.data_config.clip_counts,
         "obs_keys": cfg.model.inference_config.obs_keys,
         "remove_duplicate_genes": cfg.model.data_config.remove_duplicate_genes,
+        "use_raw": cfg.model.data_config.use_raw,
     }
-    dataset = AnnDataset(data_files, **data_kwargs)
+    if getattr(cfg.model.inference_config, "use_iterable_dataset", False):
+        # Optional chunk size
+        iter_kwargs = {}
+        if getattr(cfg.model.inference_config, "iterable_chunk_size", None) is not None:
+            iter_kwargs["iter_chunk_size"] = cfg.model.inference_config.iterable_chunk_size
+        dataset = StreamingAnnDataset(data_files, **data_kwargs, **iter_kwargs)
+    else:
+        dataset = AnnDataset(data_files, **data_kwargs)
 
     # Create dataloader
     dataloader = DataLoader(
