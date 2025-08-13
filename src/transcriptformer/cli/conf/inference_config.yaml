@@ -25,6 +25,7 @@ model:
     emb_type: cell # Type of embeddings to extract: "cell" for mean-pooled cell embeddings or "cge" for contextual gene embeddings
     use_iterable_dataset: false # Use streaming IterableDataset for low-memory processing
     iterable_chunk_size: 4096 # Chunk size (rows per step) when using iterable dataset
+    num_gpus: 1 # Number of GPUs to use for inference (1 = single GPU, -1 = all available GPUs, >1 = specific number)
 
   data_config:
     _target_: transcriptformer.data.dataclasses.DataConfig
@@ -38,3 +39,4 @@ model:
     min_expressed_genes: 0 # Minimum number of expressed genes required per cell
     use_raw: "auto" # Whether to use .raw.X (True), .X (False), or auto-detect (auto/null)
     remove_duplicate_genes: false # Whether to remove duplicate genes instead of raising an error
+    n_data_workers: 0 # Leave as 0 to ensure deterministic behavior

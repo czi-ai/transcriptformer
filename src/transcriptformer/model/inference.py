@@ -37,6 +37,16 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
     warnings.filterwarnings(
         "ignore", message="The 'predict_dataloader' does not have many workers which may be a bottleneck"
     )
+    warnings.filterwarnings(
+        "ignore", 
+        message="Your `IterableDataset` has `__len__` defined. In combination with multi-process data loading",
+        category=UserWarning
+    )
+    warnings.filterwarnings(
+        "ignore", 
+        message="Transforming to str index.",
+        category=UserWarning
+    )
 
     # Load vocabs and embeddings
     (gene_vocab, aux_vocab), emb_matrix = load_vocabs_and_embeddings(cfg)
@@ -133,14 +143,40 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
         collate_fn=dataset.collate_fn,
     )
 
+    # Determine number of GPUs to use
+    num_gpus = getattr(cfg.model.inference_config, 'num_gpus', 1)
+    
+    # Handle special cases for num_gpus
+    if num_gpus == -1:
+        # Use all available GPUs
+        devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
+        accelerator = "gpu" if torch.cuda.is_available() else "cpu"
+    elif num_gpus > 1:
+        # Use specified number of GPUs
+        available_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+        if available_gpus < num_gpus:
+            logging.warning(f"Requested {num_gpus} GPUs but only {available_gpus} available. Using {available_gpus} GPUs.")
+            devices = available_gpus if available_gpus > 0 else 1
+            accelerator = "gpu" if available_gpus > 0 else "cpu"
+        else:
+            devices = num_gpus
+            accelerator = "gpu"
+    else:
+        # Use single GPU or CPU
+        devices = 1
+        accelerator = "gpu" if torch.cuda.is_available() else "cpu"
+    
+    logging.info(f"Using {devices} device(s) with accelerator: {accelerator}")
+
     # Create Trainer
     trainer = pl.Trainer(
-        accelerator="gpu",
-        devices=1,  # Multiple GPUs/nodes not supported for inference
+        accelerator=accelerator,
+        devices=devices,
         num_nodes=1,
         precision=cfg.model.inference_config.precision,
         limit_predict_batches=None,
         logger=CSVLogger("logs", name="inference"),
+        strategy="ddp" if devices > 1 else "auto",  # Use DDP for multi-GPU
     )
 
     # Run prediction

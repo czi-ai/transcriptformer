@@ -670,5 +670,13 @@ class StreamingAnnDataset(IterableDataset):
 
         Note: This is an upper bound prior to filtering; actual yielded samples
         may be fewer. It enables progress bar display for IterableDataset.
+        
+        For distributed training, this returns the estimated length divided by
+        the number of processes to avoid the PyTorch Lightning warning.
         """
-        return int(self._estimated_total_cells)
+        # Check if we're in a distributed environment
+        if torch.distributed.is_initialized():
+            world_size = torch.distributed.get_world_size()
+            return int(self._estimated_total_cells // world_size)
+        else:
+            return int(self._estimated_total_cells)

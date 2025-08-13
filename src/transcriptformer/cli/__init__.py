@@ -24,6 +24,7 @@ Common Options for Inference:
     --gene-col-name        Column in AnnData.var with gene identifiers
     --precision            Numerical precision (16-mixed or 32)
     --pretrained-embedding Path to embedding file for out-of-distribution species
+    --num-gpus             Number of GPUs to use (1=single, -1=all available, >1=specific number)
 
 Advanced Configuration:
     Use --config-override for any configuration options not exposed as arguments above.
@@ -52,9 +53,15 @@ Examples
 """
 
 import argparse
+import json
 import logging
+import os
 import sys
 import warnings
+
+import torch
+from omegaconf import OmegaConf
+from transcriptformer.model.inference import run_inference
 
 # Suppress annoying warnings
 warnings.filterwarnings("ignore", category=FutureWarning, module="anndata")
@@ -74,7 +81,6 @@ TF_LOGO = """
 \033[38;2;108;113;131m                                            | |
 \033[38;2;108;113;131m                                            |_|
 \033[0m"""
-
 
 def setup_inference_parser(subparsers):
     """Setup the parser for the inference command."""
@@ -163,6 +169,12 @@ def setup_inference_parser(subparsers):
         action="store_true",
         default=False,
         help="Remove duplicate genes if found instead of raising an error (default: False)",
+    )
+    parser.add_argument(
+        "--num-gpus",
+        type=int,
+        default=1,
+        help="Number of GPUs to use for inference (1 = single GPU, -1 = all available GPUs, >1 = specific number) (default: 1)",
     )
     parser.add_argument(
         "--use-iterable-dataset",
@@ -254,52 +266,97 @@ def setup_download_data_parser(subparsers):
 
 def run_inference_cli(args):
     """Run inference using command line arguments."""
-    # Import the inference module directly
-    from transcriptformer.cli.inference import main as inference_main
 
-    # Create a hydra-compatible config dictionary for direct use with inference.py
-    cmd = [
-        "--config-name=inference_config.yaml",
-        f"model.checkpoint_path={args.checkpoint_path}",
-        f"model.inference_config.data_files.0={args.data_file}",
-        f"model.inference_config.batch_size={args.batch_size}",
-        f"model.data_config.gene_col_name={args.gene_col_name}",
-        f"model.inference_config.output_path={args.output_path}",
-        f"model.inference_config.output_filename={args.output_filename}",
-        f"model.inference_config.precision={args.precision}",
-        f"model.model_type={args.model_type}",
-        f"model.inference_config.emb_type={args.emb_type}",
-        f"model.data_config.remove_duplicate_genes={args.remove_duplicate_genes}",
-        f"model.inference_config.use_iterable_dataset={args.use_iterable_dataset}",
-        f"model.inference_config.iterable_chunk_size={args.iterable_chunk_size}",
-        f"model.data_config.use_raw={args.use_raw}",
-        f"model.data_config.clip_counts={args.clip_counts}",
-        f"model.data_config.filter_to_vocabs={args.filter_to_vocabs}",
-        
-    ]
+    # Only print logo if not in distributed mode (avoids duplicates)
+    is_distributed = args.num_gpus != 1
+    if not is_distributed:
+        print(TF_LOGO)
 
+    # Load the config 
+    config_path = os.path.join(os.path.dirname(__file__), "conf", "inference_config.yaml")
+    cfg = OmegaConf.load(config_path)
+    
+    # Load model config from checkpoint
+    model_config_path = os.path.join(args.checkpoint_path, "config.json")
+    with open(model_config_path) as f:
+        config_dict = json.load(f)
+    mlflow_cfg = OmegaConf.create(config_dict)
+    
+    # Merge the MLflow config with the main config
+    cfg = OmegaConf.merge(mlflow_cfg, cfg)
+    
+    # Override config values with CLI arguments
+    cfg.model.checkpoint_path = args.checkpoint_path
+    cfg.model.inference_config.data_files = [args.data_file]
+    cfg.model.inference_config.batch_size = args.batch_size
+    cfg.model.data_config.gene_col_name = args.gene_col_name
+    cfg.model.inference_config.output_path = args.output_path
+    cfg.model.inference_config.output_filename = args.output_filename
+    cfg.model.inference_config.precision = args.precision
+    cfg.model.model_type = args.model_type
+    cfg.model.inference_config.emb_type = args.emb_type
+    cfg.model.data_config.remove_duplicate_genes = args.remove_duplicate_genes
+    cfg.model.data_config.use_raw = args.use_raw
+    cfg.model.inference_config.num_gpus = args.num_gpus
+    cfg.model.inference_config.use_iterable_dataset = args.use_iterable_dataset
+    cfg.model.inference_config.iterable_chunk_size = args.iterable_chunk_size
+    cfg.model.data_config.clip_counts = args.clip_counts
+    cfg.model.data_config.filter_to_vocabs = args.filter_to_vocabs
+    
     # Add pretrained embedding if specified
     if args.pretrained_embedding:
-        cmd.append(f"model.inference_config.pretrained_embedding={args.pretrained_embedding}")
-
-    # Add any arbitrary config overrides
+        cfg.model.inference_config.pretrained_embedding = args.pretrained_embedding
+    
+    # Apply any arbitrary config overrides
     for override in args.config_override:
-        cmd.append(override)
+        if '=' not in override:
+            continue
+        key, value = override.split('=', 1)
+        # Convert value to appropriate type
+        try:
+            # Try to parse as a number or boolean
+            if value.lower() in ['true', 'false']:
+                value = value.lower() == 'true'
+            elif value.isdigit():
+                value = int(value)
+            elif '.' in value and all(part.isdigit() for part in value.split('.')):
+                value = float(value)
+        except:
+            pass  # Keep as string if conversion fails
+        
+        OmegaConf.set(cfg, key, value)
+    
+    # Set the checkpoint paths based on the unified checkpoint_path
+    cfg.model.inference_config.load_checkpoint = os.path.join(cfg.model.checkpoint_path, "model_weights.pt")
+    cfg.model.data_config.aux_vocab_path = os.path.join(cfg.model.checkpoint_path, "vocabs")
+    cfg.model.data_config.esm2_mappings_path = os.path.join(cfg.model.checkpoint_path, "vocabs")
+    
+    # Run inference directly
+    adata_output = run_inference(cfg, data_files=cfg.model.inference_config.data_files)
+    
+    # Save the output adata
+    output_path = cfg.model.inference_config.output_path
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+    
+    # Get output filename from config or use default
+    output_filename = getattr(cfg.model.inference_config, "output_filename", "embeddings.h5ad")
+    if not output_filename.endswith(".h5ad"):
+        output_filename = f"{output_filename}.h5ad"
+    save_file = os.path.join(output_path, output_filename)
+    
+    # Check if we're in a distributed environment
+    if is_distributed:
+        rank = torch.distributed.get_rank()
 
-    print("USE RAW", args.use_raw, type(args.use_raw))
-    # Print logo
-    print(TF_LOGO)
-
-    # Override sys.argv for Hydra to pick up
-    saved_argv = sys.argv
-    sys.argv = [sys.argv[0]] + cmd
-
-    try:
-        # Call the main function directly
-        inference_main()
-    finally:
-        # Restore original sys.argv
-        sys.argv = saved_argv
+        # Split the filename and add rank before extension
+        rank_file = save_file.replace('.h5ad', f'_{rank}.h5ad')
+        adata_output.write_h5ad(rank_file)
+        print(f"Rank {rank} completed processing, saved partial results to {rank_file}")
+    else:
+        # Single GPU mode - save normally
+        adata_output.write_h5ad(save_file)
+        print(f"Inference completed! Saved embeddings to {save_file}")
 
 
 def run_download_cli(args):
@@ -337,9 +394,6 @@ def run_download_data_cli(args):
 
     # Parse species list
     species_list = [s.strip() for s in args.species.split(",")] if args.species else []
-
-    # Print logo
-    print(TF_LOGO)
 
     # Run the download
     try:
