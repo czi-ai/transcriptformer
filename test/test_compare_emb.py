@@ -3,7 +3,7 @@ import os
 
 import anndata as ad
 import numpy as np
-from scipy.stats import pearsonr
+from scipy.stats import pearsonr, ttest_rel
 
 
 def compare_embeddings(file1, file2, tolerance=1e-5):
@@ -31,18 +31,18 @@ def compare_embeddings(file1, file2, tolerance=1e-5):
     adata2 = ad.read_h5ad(file2)
 
     # Check if embeddings exist
-    if "emb" not in adata1.obsm or "emb" not in adata2.obsm:
+    if "embeddings" not in adata1.obsm or "embeddings" not in adata2.obsm:
         missing = []
-        if "emb" not in adata1.obsm:
-            missing.append(f"'emb' not found in {file1}")
-        if "emb" not in adata2.obsm:
-            missing.append(f"'emb' not found in {file2}")
+        if "embedding" not in adata1.obsm:
+            missing.append(f"'embedding' not found in {file1}")
+        if "embedding" not in adata2.obsm:
+            missing.append(f"'embedding' not found in {file2}")
         print(f"Error: {', '.join(missing)}")
         return False
 
     # Get embeddings
-    emb1 = adata1.obsm["emb"]
-    emb2 = adata2.obsm["emb"]
+    emb1 = adata1.obsm["embeddings"]
+    emb2 = adata2.obsm["embeddings"]
 
     # Check shapes
     if emb1.shape != emb2.shape:
@@ -64,10 +64,20 @@ def compare_embeddings(file1, file2, tolerance=1e-5):
         emb2_flat = emb2.flatten()
         corr, _ = pearsonr(emb1_flat, emb2_flat)
 
+        # Calculate z-score and p-value for difference test
+        # Using paired t-test to test null hypothesis that embeddings are the same
+        diff = emb1_flat - emb2_flat
+        t_stat, p_value = ttest_rel(emb1_flat, emb2_flat)
+        
+        # Calculate z-score manually from the differences
+        z_score = np.mean(diff) / (np.std(diff) / np.sqrt(len(diff)))
+
         print("Embeddings differ:")
         print(f"  Max absolute difference: {max_diff:.6e}")
         print(f"  Mean absolute difference: {mean_diff:.6e}")
         print(f"  Pearson correlation: {corr:.6f}")
+        print(f"  Z-score (difference): {z_score:.6f}")
+        print(f"  P-value (paired t-test): {p_value:.6e}")
         return False
 
 

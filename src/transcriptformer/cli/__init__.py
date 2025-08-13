@@ -271,15 +271,12 @@ def run_inference_cli(args):
         f"model.inference_config.emb_type={args.emb_type}",
         f"model.data_config.remove_duplicate_genes={args.remove_duplicate_genes}",
         f"model.inference_config.use_iterable_dataset={args.use_iterable_dataset}",
+        f"model.inference_config.iterable_chunk_size={args.iterable_chunk_size}",
         f"model.data_config.use_raw={args.use_raw}",
         f"model.data_config.clip_counts={args.clip_counts}",
         f"model.data_config.filter_to_vocabs={args.filter_to_vocabs}",
         
     ]
-
-    # Only pass iterable_chunk_size if explicitly provided (not None)
-    # Always pass explicit chunk size (has default)
-    cmd.append(f"model.inference_config.iterable_chunk_size={args.iterable_chunk_size}")
 
     # Add pretrained embedding if specified
     if args.pretrained_embedding:
