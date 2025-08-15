@@ -18,7 +18,13 @@ def _require_umap():
     return umap
 
 
-def compute_umap(embeddings: np.ndarray, n_neighbors: int = 15, min_dist: float = 0.1, metric: str = "euclidean", random_state: int | None = 42) -> np.ndarray:
+def compute_umap(
+    embeddings: np.ndarray,
+    n_neighbors: int = 15,
+    min_dist: float = 0.1,
+    metric: str = "euclidean",
+    random_state: int | None = 42,
+) -> np.ndarray:
     """
     Compute a 2D UMAP from input embeddings.
 
@@ -80,17 +86,13 @@ def compare_umaps(
             missing.append(f"'embeddings' not found in {file1}")
         if "embeddings" not in adata2.obsm:
             missing.append(f"'embeddings' not found in {file2}")
-        raise ValueError(
-            "; ".join(missing)
-        )
+        raise ValueError("; ".join(missing))
 
     emb1 = np.asarray(adata1.obsm["embeddings"])  # (n, d)
     emb2 = np.asarray(adata2.obsm["embeddings"])  # (n, d)
 
     if emb1.shape[0] != emb2.shape[0]:
-        raise ValueError(
-            f"Number of rows differ between embeddings: {emb1.shape[0]} vs {emb2.shape[0]}"
-        )
+        raise ValueError(f"Number of rows differ between embeddings: {emb1.shape[0]} vs {emb2.shape[0]}")
 
     # Compute UMAPs independently
     umap1 = compute_umap(emb1, n_neighbors=n_neighbors, min_dist=min_dist, metric=metric, random_state=random_state)
@@ -120,7 +122,7 @@ def compare_umaps(
                     series2 = adata2.obs[obs_key]
                     labels1 = series1.astype(str).to_numpy()
                     labels2 = series2.astype(str).to_numpy()
-                    categories = sorted(list(set(labels1).union(set(labels2))))
+                    categories = sorted(set(labels1).union(set(labels2)))
 
                     import matplotlib as mpl
 
@@ -196,7 +198,7 @@ def main():
     parser.add_argument(
         "--save-plot",
         type=str,
-        default='./umap_comparison.png',
+        default="./umap_comparison.png",
         help="Optional path to save a side-by-side aligned UMAP comparison plot (PNG)",
     )
     parser.add_argument(
@@ -236,5 +238,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

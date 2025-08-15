@@ -243,7 +243,7 @@ transcriptformer inference \
 transcriptformer inference \
   --checkpoint-path ./checkpoints/tf_sapiens \
   --data-file test/data/human_val.h5ad \
-  --num-gpus 4 \ 
+  --num-gpus 4 \
   --batch-size 32
 ```
 
@@ -288,13 +288,13 @@ transcriptformer download-data --help
 - `--pretrained-embedding PATH`: Path to pretrained embeddings for out-of-distribution species.
 - `--clip-counts INT`: Maximum count value (higher values will be clipped) (default: 30).
 - `--filter-to-vocabs`: Whether to filter genes to only those in the vocabulary (default: True).
-- `--use-iterable-dataset`: Use a streaming IterableDataset for low-memory processing; yields cells on-the-fly (default: False). 
-- `--iterable-chunk-size INT`: Optional chunk size (number of cells) processed per step when using the iterable dataset. 
 - `--use-raw {True,False,auto}`: Whether to use raw counts from `AnnData.raw.X` (True), `adata.X` (False), or auto-detect (auto/None) (default: None).
 - `--embedding-layer-index INT`: Index of the transformer layer to extract embeddings from (-1 for last layer, default: -1). Use with `transcriptformer` model type.
 - `--model-type {transcriptformer,esm2ce}`: Type of model to use (default: `transcriptformer`). Use `esm2ce` to extract raw ESM2-CE gene embeddings.
 - `--emb-type {cell,cge}`: Type of embeddings to extract (default: `cell`). Use `cell` for mean-pooled cell embeddings or `cge` for contextual gene embeddings.
 - `--num-gpus INT`: Number of GPUs to use for inference (default: 1). Use -1 for all available GPUs, or specify a specific number.
+- `--oom-dataloader`: Use the OOM-safe map-style DataLoader (uses backed reads and per-item densification; DistributedSampler-friendly).
+- `--n-data-workers INT`: Number of DataLoader workers per process (default: 0). Order is preserved with the map-style dataset and DistributedSampler.
 - `--config-override key.path=value`: Override any configuration value directly.
 
 ### Input Data Format and Preprocessing:
@@ -315,16 +315,17 @@ Input data files should be in H5AD format (AnnData objects) with the following r
   - `True`: Use only `adata.raw.X`
   - `False`: Use only `adata.X`
 
- - **Streaming Inference**:
-   - To reduce peak memory usage on large datasets, enable streaming:
+ - **OOM-safe Data Loading**:
+   - To reduce peak memory usage on large datasets, enable the OOM-safe dataloader:
      ```bash
      transcriptformer inference \
        --checkpoint-path ./checkpoints/tf_sapiens \
        --data-file ./data/huge.h5ad \
-       --use-iterable-dataset \
-       --iterable-chunk-size 4096
+       --oom-dataloader \
+       --n-data-workers 4 \
+       --num-gpus 8
      ```
-   - This uses an IterableDataset that processes cells in chunks and yields items to the DataLoader without loading all cells into memory.
+   - This uses a map-style dataset with backed reads and per-row densification. It is compatible with `DistributedSampler`, so multiple workers are safe and ordering is preserved.
 
 - **Count Processing**:
   - Count values are clipped at 30 by default (as was done in training)

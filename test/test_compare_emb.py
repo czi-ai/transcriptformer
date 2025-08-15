@@ -68,7 +68,7 @@ def compare_embeddings(file1, file2, tolerance=1e-5):
         # Using paired t-test to test null hypothesis that embeddings are the same
         diff = emb1_flat - emb2_flat
         t_stat, p_value = ttest_rel(emb1_flat, emb2_flat)
-        
+
         # Calculate z-score manually from the differences
         z_score = np.mean(diff) / (np.std(diff) / np.sqrt(len(diff)))
 

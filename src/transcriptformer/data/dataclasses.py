@@ -191,13 +191,11 @@ class InferenceConfig:
     output_filename: str | None = "embeddings.h5ad"
     num_gpus: int = 1
     num_nodes: int = 1
+    use_oom_dataloader: bool = False
     precision: str = "16-mixed"
     special_tokens: list = field(default_factory=list)
     pretrained_embedding: list = field(default_factory=list)
     emb_type: str = "cell"
-    # Streaming/iterable dataset options (moved from data_config)
-    use_iterable_dataset: bool = False  # If True, use StreamingAnnDataset instead of AnnDataset
-    iterable_chunk_size: int = 4096  # Per-file processing chunk size for streaming
 
     def __post_init__(self):
         if self.emb_type not in {"cell", "cge"}:

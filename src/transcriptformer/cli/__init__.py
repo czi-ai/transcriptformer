@@ -61,6 +61,7 @@ import warnings
 
 import torch
 from omegaconf import OmegaConf
+
 from transcriptformer.model.inference import run_inference
 
 # Suppress annoying warnings
@@ -81,6 +82,7 @@ TF_LOGO = """
 \033[38;2;108;113;131m                                            | |
 \033[38;2;108;113;131m                                            |_|
 \033[0m"""
+
 
 def setup_inference_parser(subparsers):
     """Setup the parser for the inference command."""
@@ -177,16 +179,16 @@ def setup_inference_parser(subparsers):
         help="Number of GPUs to use for inference (1 = single GPU, -1 = all available GPUs, >1 = specific number) (default: 1)",
     )
     parser.add_argument(
-        "--use-iterable-dataset",
+        "--oom-dataloader",
         action="store_true",
         default=False,
-        help="Use streaming IterableDataset for low-memory processing (default: False)",
+        help="Use map-style out-of-memory DataLoader (DistributedSampler-friendly)",
     )
     parser.add_argument(
-        "--iterable-chunk-size",
+        "--n-data-workers",
         type=int,
-        default=4096,
-        help="Chunk size of rows per processing step when using the iterable dataset (default: auto)",
+        default=0,
+        help="Number of DataLoader workers per process (map-style dataset is order-safe).",
     )
 
     # Allow arbitrary config overrides
@@ -266,25 +268,24 @@ def setup_download_data_parser(subparsers):
 
 def run_inference_cli(args):
     """Run inference using command line arguments."""
-
     # Only print logo if not in distributed mode (avoids duplicates)
     is_distributed = args.num_gpus != 1
     if not is_distributed:
         print(TF_LOGO)
 
-    # Load the config 
+    # Load the config
     config_path = os.path.join(os.path.dirname(__file__), "conf", "inference_config.yaml")
     cfg = OmegaConf.load(config_path)
-    
+
     # Load model config from checkpoint
     model_config_path = os.path.join(args.checkpoint_path, "config.json")
     with open(model_config_path) as f:
         config_dict = json.load(f)
     mlflow_cfg = OmegaConf.create(config_dict)
-    
+
     # Merge the MLflow config with the main config
     cfg = OmegaConf.merge(mlflow_cfg, cfg)
-    
+
     # Override config values with CLI arguments
     cfg.model.checkpoint_path = args.checkpoint_path
     cfg.model.inference_config.data_files = [args.data_file]
@@ -298,59 +299,63 @@ def run_inference_cli(args):
     cfg.model.data_config.remove_duplicate_genes = args.remove_duplicate_genes
     cfg.model.data_config.use_raw = args.use_raw
     cfg.model.inference_config.num_gpus = args.num_gpus
-    cfg.model.inference_config.use_iterable_dataset = args.use_iterable_dataset
-    cfg.model.inference_config.iterable_chunk_size = args.iterable_chunk_size
+    cfg.model.inference_config.use_oom_dataloader = args.oom_dataloader
     cfg.model.data_config.clip_counts = args.clip_counts
     cfg.model.data_config.filter_to_vocabs = args.filter_to_vocabs
-    
+    cfg.model.data_config.n_data_workers = args.n_data_workers
+
     # Add pretrained embedding if specified
     if args.pretrained_embedding:
         cfg.model.inference_config.pretrained_embedding = args.pretrained_embedding
-    
+
     # Apply any arbitrary config overrides
     for override in args.config_override:
-        if '=' not in override:
+        if "=" not in override:
             continue
-        key, value = override.split('=', 1)
+        key, value = override.split("=", 1)
         # Convert value to appropriate type
         try:
             # Try to parse as a number or boolean
-            if value.lower() in ['true', 'false']:
-                value = value.lower() == 'true'
+            if value.lower() in ["true", "false"]:
+                value = value.lower() == "true"
+            elif value.lower() in ["none", "null"]:
+                value = None
             elif value.isdigit():
                 value = int(value)
-            elif '.' in value and all(part.isdigit() for part in value.split('.')):
+            elif "." in value and all(part.isdigit() for part in value.split(".")):
                 value = float(value)
-        except:
-            pass  # Keep as string if conversion fails
-        
-        OmegaConf.set(cfg, key, value)
-    
+        except Exception:
+            # Keep as string if conversion fails
+            pass
+
+        # Use OmegaConf.update to set nested keys like "a.b.c" or list indices like "a.list.0"
+        OmegaConf.update(cfg, key, value)
+
     # Set the checkpoint paths based on the unified checkpoint_path
     cfg.model.inference_config.load_checkpoint = os.path.join(cfg.model.checkpoint_path, "model_weights.pt")
     cfg.model.data_config.aux_vocab_path = os.path.join(cfg.model.checkpoint_path, "vocabs")
     cfg.model.data_config.esm2_mappings_path = os.path.join(cfg.model.checkpoint_path, "vocabs")
-    
+
     # Run inference directly
     adata_output = run_inference(cfg, data_files=cfg.model.inference_config.data_files)
-    
+
     # Save the output adata
     output_path = cfg.model.inference_config.output_path
     if not os.path.exists(output_path):
         os.makedirs(output_path)
-    
+
     # Get output filename from config or use default
     output_filename = getattr(cfg.model.inference_config, "output_filename", "embeddings.h5ad")
     if not output_filename.endswith(".h5ad"):
         output_filename = f"{output_filename}.h5ad"
     save_file = os.path.join(output_path, output_filename)
-    
+
     # Check if we're in a distributed environment
     if is_distributed:
         rank = torch.distributed.get_rank()
 
         # Split the filename and add rank before extension
-        rank_file = save_file.replace('.h5ad', f'_{rank}.h5ad')
+        rank_file = save_file.replace(".h5ad", f"_{rank}.h5ad")
         adata_output.write_h5ad(rank_file)
         print(f"Rank {rank} completed processing, saved partial results to {rank_file}")
     else:

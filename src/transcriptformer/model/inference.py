@@ -9,7 +9,7 @@ import torch
 from pytorch_lightning.loggers import CSVLogger
 from torch.utils.data import DataLoader
 
-from transcriptformer.data.dataloader import AnnDataset, StreamingAnnDataset
+from transcriptformer.data.dataloader import AnnDataset, AnnDatasetOOM
 from transcriptformer.model.embedding_surgery import change_embedding_layer
 from transcriptformer.tokenizer.vocab import load_vocabs_and_embeddings
 from transcriptformer.utils.utils import stack_dict
@@ -38,15 +38,11 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
         "ignore", message="The 'predict_dataloader' does not have many workers which may be a bottleneck"
     )
     warnings.filterwarnings(
-        "ignore", 
+        "ignore",
         message="Your `IterableDataset` has `__len__` defined. In combination with multi-process data loading",
-        category=UserWarning
+        category=UserWarning,
     )
-    warnings.filterwarnings(
-        "ignore", 
-        message="Transforming to str index.",
-        category=UserWarning
-    )
+    warnings.filterwarnings("ignore", message="Transforming to str index.", category=UserWarning)
 
     # Load vocabs and embeddings
     (gene_vocab, aux_vocab), emb_matrix = load_vocabs_and_embeddings(cfg)
@@ -124,12 +120,24 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
         "remove_duplicate_genes": cfg.model.data_config.remove_duplicate_genes,
         "use_raw": cfg.model.data_config.use_raw,
     }
-    if getattr(cfg.model.inference_config, "use_iterable_dataset", False):
-        # Optional chunk size
-        iter_kwargs = {}
-        if getattr(cfg.model.inference_config, "iterable_chunk_size", None) is not None:
-            iter_kwargs["iter_chunk_size"] = cfg.model.inference_config.iterable_chunk_size
-        dataset = StreamingAnnDataset(data_files, **data_kwargs, **iter_kwargs)
+    if getattr(cfg.model.inference_config, "use_oom_dataloader", False):
+        # Use OOM-safe map-style dataset
+        dataset = AnnDatasetOOM(
+            data_files,
+            gene_vocab,
+            aux_vocab=aux_vocab,
+            max_len=cfg.model.model_config.seq_len,
+            normalize_to_scale=cfg.model.data_config.normalize_to_scale,
+            sort_genes=cfg.model.data_config.sort_genes,
+            randomize_order=cfg.model.data_config.randomize_genes,
+            pad_zeros=cfg.model.data_config.pad_zeros,
+            gene_col_name=cfg.model.data_config.gene_col_name,
+            filter_to_vocab=cfg.model.data_config.filter_to_vocabs,
+            clip_counts=cfg.model.data_config.clip_counts,
+            obs_keys=cfg.model.inference_config.obs_keys,
+            use_raw=cfg.model.data_config.use_raw,
+            remove_duplicate_genes=cfg.model.data_config.remove_duplicate_genes,
+        )
     else:
         dataset = AnnDataset(data_files, **data_kwargs)
 
@@ -144,8 +152,8 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
     )
 
     # Determine number of GPUs to use
-    num_gpus = getattr(cfg.model.inference_config, 'num_gpus', 1)
-    
+    num_gpus = getattr(cfg.model.inference_config, "num_gpus", 1)
+
     # Handle special cases for num_gpus
     if num_gpus == -1:
         # Use all available GPUs
@@ -155,7 +163,9 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
         # Use specified number of GPUs
         available_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
         if available_gpus < num_gpus:
-            logging.warning(f"Requested {num_gpus} GPUs but only {available_gpus} available. Using {available_gpus} GPUs.")
+            logging.warning(
+                f"Requested {num_gpus} GPUs but only {available_gpus} available. Using {available_gpus} GPUs."
+            )
             devices = available_gpus if available_gpus > 0 else 1
             accelerator = "gpu" if available_gpus > 0 else "cpu"
         else:
@@ -165,7 +175,7 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
         # Use single GPU or CPU
         devices = 1
         accelerator = "gpu" if torch.cuda.is_available() else "cpu"
-    
+
     logging.info(f"Using {devices} device(s) with accelerator: {accelerator}")
 
     # Create Trainer

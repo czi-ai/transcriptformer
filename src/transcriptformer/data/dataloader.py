@@ -9,7 +9,7 @@ import scanpy as sc
 import torch
 from scipy.sparse import csc_matrix, csr_matrix
 from torch import tensor
-from torch.utils.data import Dataset, IterableDataset
+from torch.utils.data import Dataset
 
 from transcriptformer.data.dataclasses import BatchData
 from transcriptformer.tokenizer.tokenizer import (
@@ -18,10 +18,18 @@ from transcriptformer.tokenizer.tokenizer import (
 )
 
 
-def load_data(file_path):
-    """Load H5AD file."""
+def load_data(file_path, *, backed: bool = False):
+    """Load H5AD file.
+
+    Args:
+        file_path: Path to .h5ad file
+        backed: If True, use memory-mapped backed='r' mode (for streaming); otherwise fully load into memory
+    """
     try:
-        adata = sc.read_h5ad(file_path)
+        if backed:
+            adata = anndata.read_h5ad(file_path, backed="r")
+        else:
+            adata = sc.read_h5ad(file_path)
         return adata, True
     except Exception as e:
         logging.error(f"Failed to read file {file_path}: {e}")
@@ -159,6 +167,7 @@ def process_batch(
 
     return result
 
+
 def get_counts_layer(adata: anndata.AnnData, use_raw: bool | None):
     if use_raw is True:
         if adata.raw is not None:
@@ -184,7 +193,7 @@ def get_counts_layer(adata: anndata.AnnData, use_raw: bool | None):
 
 
 def to_dense(X: np.ndarray | csr_matrix | csc_matrix) -> np.ndarray:
-    if isinstance(X, (csr_matrix, csc_matrix)):
+    if isinstance(X, csr_matrix | csc_matrix):
         return X.toarray()
     elif isinstance(X, np.ndarray):
         return X
@@ -192,20 +201,50 @@ def to_dense(X: np.ndarray | csr_matrix | csc_matrix) -> np.ndarray:
         raise TypeError(f"Expected numpy array or sparse matrix, got {type(X)}")
 
 
-def is_raw_counts(X: np.ndarray) -> bool:
+def is_raw_counts(X: np.ndarray | csr_matrix | csc_matrix) -> bool:
+    """Check if a matrix looks like raw counts (integer-valued where non-zero).
+
+    Handles both dense numpy arrays and sparse CSR/CSC matrices without densifying the full matrix.
+    """
+    # Sparse path: operate on non-zero data directly
+    if isinstance(X, csr_matrix | csc_matrix):
+        data = X.data
+        if data.size == 0:
+            return False
+        # Sample if very large
+        if data.size > 1000:
+            idx = np.random.choice(data.size, 1000, replace=False)
+            data = data[idx]
+        return np.all(np.abs(data - np.round(data)) < 1e-6)
+
+    # Dense path
     non_zero_mask = X > 0
     if not np.any(non_zero_mask):
         return False
     non_zero_values = X[non_zero_mask]
-    if len(non_zero_values) > 1000:
-        non_zero_values = np.random.choice(non_zero_values, 1000, replace=False)
-    is_integer = np.all(np.abs(non_zero_values - np.round(non_zero_values)) < 1e-6)
-    return is_integer
+    if non_zero_values.size > 1000:
+        idx = np.random.choice(non_zero_values.size, 1000, replace=False)
+        non_zero_values = non_zero_values.flatten()[idx]
+    return np.all(np.abs(non_zero_values - np.round(non_zero_values)) < 1e-6)
 
 
-def load_gene_features(adata: anndata.AnnData, gene_col_name: str, remove_duplicate_genes: bool):
+def load_gene_features(
+    adata: anndata.AnnData, gene_col_name: str, remove_duplicate_genes: bool, use_raw: bool | None = None
+):
     try:
-        gene_names = np.array(list(adata.var[gene_col_name].values))
+        # Select the appropriate var depending on which matrix will be used
+        using_raw = bool(use_raw is True or (use_raw is None and getattr(adata, "raw", None) is not None))
+        var_df = adata.raw.var if using_raw and getattr(adata, "raw", None) is not None else adata.var
+
+        # Prefer requested column; otherwise use index which aligns with matrix columns for that layer
+        if gene_col_name in var_df.columns:
+            gene_names = np.array(list(var_df[gene_col_name].values))
+        else:
+            raise ValueError(
+                f"Gene column '{gene_col_name}' not found in var DataFrame columns: {list(var_df.columns)}"
+            )
+
+        # Remove version numbers from gene names
         gene_names = np.array([id.split(".")[0] for id in gene_names])
 
         gene_counts = Counter(gene_names)
@@ -240,6 +279,7 @@ def validate_gene_dimension(X: np.ndarray, gene_names: np.ndarray, gene_col_name
             f"Mismatch between expression matrix columns ({X.shape[1]}) and gene names length ({len(gene_names)}). "
             f"Ensure 'adata.var[{gene_col_name}]' exists and aligns with the matrix columns."
         )
+
 
 class AnnDataset(Dataset):
     def __init__(
@@ -315,13 +355,14 @@ class AnnDataset(Dataset):
             return None
 
         gene_names, success, adata = load_gene_features(
-            adata, self.gene_col_name, self.remove_duplicate_genes
+            adata, self.gene_col_name, self.remove_duplicate_genes, use_raw=self.use_raw
         )
         if not success:
             logging.error(f"Failed to load gene features from {file_path}")
             return None
 
         X = get_counts_layer(adata, self.use_raw)
+        # AnnDataset loads and processes all data in-memory; convert to dense for batching
         X = to_dense(X)
         obs = adata.obs
 
@@ -329,14 +370,14 @@ class AnnDataset(Dataset):
         validate_gene_dimension(X, gene_names, self.gene_col_name)
 
         # Check if the data appears to be raw counts
-        logging.info(f"Checking if data is raw counts")
+        logging.info("Checking if data is raw counts")
         if not is_raw_counts(X):
             logging.warning(
                 "Data does not appear to be raw counts. TranscriptFormer expects unnormalized count data. "
                 "If your data is normalized, consider using the original count matrix instead."
             )
 
-        logging.info(f"Applying filters")
+        logging.info("Applying filters")
         vocab = self.gene_vocab
         X, obs, gene_names = apply_filters(
             X,
@@ -353,7 +394,7 @@ class AnnDataset(Dataset):
             logging.warning(f"Data was filtered out completely for {file_path}")
             return None
 
-        logging.info(f"Processing data")
+        logging.info("Processing data")
         batch = process_batch(
             X,
             obs,
@@ -459,44 +500,33 @@ class AnnDataset(Dataset):
         return collated_batch
 
 
-class StreamingAnnDataset(IterableDataset):
-    """Iterable variant of AnnDataset that loads and processes data iteratively.
+class AnnDatasetOOM(Dataset):
+    """Map-style OOM-safe dataset using backed reads and per-item processing.
 
-    This class reuses the same top-level helpers in this module:
-    - load_data
-    - apply_filters
-    - process_batch
-
-    It yields one cell at a time as a BatchData instance, allowing PyTorch's
-    DataLoader to batch items using the existing AnnDataset.collate_fn.
+    Designed to provide OOM-safe iteration while leveraging PyTorch's
+    DistributedSampler for automatic sharding across DDP ranks.
     """
 
-    # Reuse the same collate function for batching behavior identical to AnnDataset
     collate_fn = staticmethod(AnnDataset.collate_fn)
 
     def __init__(
         self,
-        files_list: list[str] | list[anndata.AnnData],
+        files_list: list[str],
         gene_vocab: dict[str, str],
-        data_dir: str = None,
-        aux_vocab: dict[str, dict[str, str]] = None,
+        data_dir: str | None = None,
+        aux_vocab: dict[str, dict[str, str]] | None = None,
         max_len: int = 2048,
-        normalize_to_scale: bool = None,
+        normalize_to_scale: float | None = None,
         sort_genes: bool = False,
         randomize_order: bool = False,
         pad_zeros: bool = True,
+        pad_token: str = "[PAD]",
         gene_col_name: str = "ensembl_id",
         filter_to_vocab: bool = True,
-        filter_outliers: float = 0.0,
-        min_expressed_genes: int = 0,
-        seed: int = 0,
-        pad_token: str = "[PAD]",
         clip_counts: float = 1e10,
-        inference: bool = False,
-        obs_keys: list[str] = None,
-        use_raw: bool = None,
+        obs_keys: list[str] | None = None,
+        use_raw: bool | None = None,
         remove_duplicate_genes: bool = False,
-        iter_chunk_size: int | None = None,
     ):
         super().__init__()
         self.files_list = files_list
@@ -508,175 +538,109 @@ class StreamingAnnDataset(IterableDataset):
         self.sort_genes = sort_genes
         self.randomize_order = randomize_order
         self.pad_zeros = pad_zeros
+        self.pad_token = pad_token
         self.gene_col_name = gene_col_name
         self.filter_to_vocab = filter_to_vocab
-        self.filter_outliers = filter_outliers
-        self.min_expressed_genes = min_expressed_genes
-        self.seed = seed
-        self.pad_token = pad_token
         self.clip_counts = clip_counts
-        self.inference = inference
         self.obs_keys = obs_keys
         self.use_raw = use_raw
         self.remove_duplicate_genes = remove_duplicate_genes
-        self.iter_chunk_size = iter_chunk_size
 
         self.gene_tokenizer = BatchGeneTokenizer(gene_vocab)
         if aux_vocab is not None:
             self.aux_tokenizer = BatchObsTokenizer(aux_vocab)
 
-        random.seed(self.seed)
-
-        # Estimate total cells for progress bars (approximate; ignores filtering)
-        self._estimated_total_cells = 0
+        # Open backed handles and build cumulative row offsets
+        self._handles: list[anndata.AnnData] = []
+        self._gene_names_per_file: list[np.ndarray] = []
+        self._filter_idx_per_file: list[list[int] | None] = []
+        self._X_per_file: list = []
+        self._n_rows: list[int] = []
         for file in self.files_list:
-            try:
-                if isinstance(file, str):
-                    file_path = file if self.data_dir is None else os.path.join(self.data_dir, file)
-                    ad = anndata.read_h5ad(file_path, backed='r')
-                    self._estimated_total_cells += int(getattr(ad, 'n_obs', 0))
-                    if hasattr(ad, 'file') and ad.file is not None:
-                        ad.file.close()
-                elif isinstance(file, anndata.AnnData):
-                    self._estimated_total_cells += int(file.n_obs)
-            except Exception:
-                # If estimation fails for a file, skip it (progress bar may be undercounted)
-                continue
-
-    
-
-    def _yield_cells_from_arrays(self, X: np.ndarray, obs, gene_names: np.ndarray, file_path: str | None):
-        """Yield BatchData objects one cell at a time from arrays, processing in chunks."""
-        num_cells = X.shape[0]
-        chunk = self.iter_chunk_size
-        for start in range(0, num_cells, chunk):
-            end = min(start + chunk, num_cells)
-            x_chunk = X[start:end]
-            obs_chunk = obs.iloc[start:end]
-            gene_names_chunk = gene_names
-
-            batch = process_batch(
-                x_chunk,
-                obs_chunk,
-                gene_names_chunk,
-                self.gene_tokenizer,
-                getattr(self, "aux_tokenizer", None),
-                self.sort_genes,
-                self.randomize_order,
-                self.max_len,
-                self.pad_zeros,
-                self.pad_token,
-                self.gene_vocab,
-                self.normalize_to_scale,
-                self.clip_counts,
-                self.aux_vocab,
-            )
-
-            # Attach obs as needed to match AnnDataset behavior
-            if self.obs_keys is not None:
-                obs_data = {}
-                if "all" in self.obs_keys:
-                    cols = obs_chunk.columns
-                    for col in cols:
-                        obs_data[col] = np.array(obs_chunk[col].tolist())[:, None]
-                else:
-                    for col in self.obs_keys:
-                        obs_data[col] = np.array(obs_chunk[col].tolist())[:, None]
-            else:
-                obs_data = None
-
-            # Yield one cell at a time so DataLoader can batch them
-            for i in range(end - start):
-                yield BatchData(
-                    gene_counts=batch["gene_counts"][i],
-                    gene_token_indices=batch["gene_token_indices"][i],
-                    file_path=None,
-                    aux_token_indices=(
-                        batch.get("aux_token_indices")[i] if batch.get("aux_token_indices") is not None else None
-                    ),
-                    obs=(
-                        {col: obs_data[col][i][None, :] for col in obs_data}
-                        if obs_data is not None
-                        else None
-                    ),
-                )
-
-    def __iter__(self):
-        # Deterministic iteration
-        random.seed(self.seed)
-
-        for idx, file in enumerate(self.files_list):
-            logging.info(f"Streaming file {idx + 1} of {len(self.files_list)}")
-
-            if isinstance(file, str):
-                file_path = file
-                if self.data_dir is not None:
-                    file_path = os.path.join(self.data_dir, file_path)
-                adata, success = load_data(file_path)
-            elif isinstance(file, anndata.AnnData):
-                adata = file
-                success = True
-                file_path = None
-            else:
-                raise ValueError(f"Invalid file type: {type(file)}")
-
-            if not success:
-                logging.error(f"Failed to load data from {file_path}")
-                continue
-
+            file_path = file if self.data_dir is None else os.path.join(self.data_dir, file)
+            adata = anndata.read_h5ad(file_path, backed="r")
             gene_names, success, adata = load_gene_features(
-                adata, self.gene_col_name, self.remove_duplicate_genes
+                adata, self.gene_col_name, self.remove_duplicate_genes, use_raw=self.use_raw
             )
             if not success:
-                logging.error(f"Failed to load gene features from {file_path}")
-                continue
-
-            X = get_counts_layer(adata, self.use_raw)
-            X = to_dense(X)
-            obs = adata.obs
-
-            # Validate that gene dimension matches number of gene names
-            validate_gene_dimension(X, gene_names, self.gene_col_name)
-
-            # Same checks as AnnDataset
-            logging.info("Checking if data is raw counts")
-            if not is_raw_counts(X):
-                logging.warning(
-                    "Data does not appear to be raw counts. TranscriptFormer expects unnormalized count data. "
-                    "If your data is normalized, consider using the original count matrix instead."
+                raise ValueError(f"Failed to load gene features from {file_path}")
+            # Optional vocab filtering at token level
+            filter_idx = None
+            if self.filter_to_vocab:
+                original_gene_count = len(gene_names)
+                filter_idx = [i for i, name in enumerate(gene_names) if name in self.gene_vocab]
+                gene_names = gene_names[filter_idx]
+                logging.info(
+                    f"Filtered {original_gene_count} genes to {len(gene_names)} genes in vocab for file {file_path}"
                 )
+                if len(gene_names) == 0:
+                    raise ValueError(f"No genes remaining after filtering for file {file_path}")
 
-            logging.info("Applying filters")
-            X, obs, gene_names = apply_filters(
-                X,
-                obs,
-                gene_names,
-                file_path,
-                self.filter_to_vocab,
-                self.gene_vocab,
-                self.filter_outliers,
-                self.min_expressed_genes,
-            )
+            self._handles.append(adata)
+            self._gene_names_per_file.append(gene_names)
+            self._filter_idx_per_file.append(filter_idx)
+            X_layer = get_counts_layer(adata, self.use_raw)
+            self._X_per_file.append(X_layer)
+            self._n_rows.append(int(adata.n_obs))
 
-            if X is None:
-                logging.warning(f"Data was filtered out completely for {file_path}")
-                continue
-
-            logging.info("Processing and yielding cells")
-            yield from self._yield_cells_from_arrays(X, obs, gene_names, file_path)
+        self._offsets = np.cumsum([0] + self._n_rows)
 
     def __len__(self) -> int:
-        """Return an estimated total number of samples for progress bars.
+        return int(self._offsets[-1])
 
-        Note: This is an upper bound prior to filtering; actual yielded samples
-        may be fewer. It enables progress bar display for IterableDataset.
-        
-        For distributed training, this returns the estimated length divided by
-        the number of processes to avoid the PyTorch Lightning warning.
-        """
-        # Check if we're in a distributed environment
-        if torch.distributed.is_initialized():
-            world_size = torch.distributed.get_world_size()
-            return int(self._estimated_total_cells // world_size)
-        else:
-            return int(self._estimated_total_cells)
+    def _loc(self, idx: int) -> tuple[int, int]:
+        file_id = int(np.searchsorted(self._offsets, idx, side="right") - 1)
+        row = int(idx - self._offsets[file_id])
+        return file_id, row
+
+    def __getitem__(self, idx: int) -> BatchData:
+        file_id, row = self._loc(idx)
+        adata = self._handles[file_id]
+        gene_names = self._gene_names_per_file[file_id]
+        filter_idx = self._filter_idx_per_file[file_id]
+
+        X = self._X_per_file[file_id]
+        # Some backed sparse implementations use __getitem__ returning 2D; ensure 1D
+        x_row = X[row]
+        x_row = x_row.toarray().ravel() if hasattr(x_row, "toarray") else np.asarray(x_row).ravel()
+        if filter_idx is not None:
+            x_row = x_row[filter_idx]
+
+        obs_row = adata.obs.iloc[row : row + 1]
+
+        # Build a 1-row batch and reuse existing processing pipeline
+        x_batch = np.expand_dims(x_row, axis=0)
+        batch = process_batch(
+            x_batch,
+            obs_row,
+            gene_names,
+            self.gene_tokenizer,
+            getattr(self, "aux_tokenizer", None),
+            self.sort_genes,
+            self.randomize_order,
+            self.max_len,
+            self.pad_zeros,
+            self.pad_token,
+            self.gene_vocab,
+            self.normalize_to_scale,
+            self.clip_counts,
+            self.aux_vocab,
+        )
+
+        # Convert to BatchData for collate_fn compatibility
+        obs_dict = None
+        if self.obs_keys is not None:
+            obs_dict = {}
+            cols = list(obs_row.columns) if "all" in self.obs_keys else list(self.obs_keys or [])
+            for col in cols:
+                obs_dict[col] = np.array(obs_row[col].tolist())[:, None]
+
+        return BatchData(
+            gene_counts=batch["gene_counts"][0],
+            gene_token_indices=batch["gene_token_indices"][0],
+            file_path=None,
+            aux_token_indices=(
+                batch.get("aux_token_indices")[0] if batch.get("aux_token_indices") is not None else None
+            ),
+            obs=obs_dict,
+        )
