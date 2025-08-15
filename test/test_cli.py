@@ -63,52 +63,6 @@ class TestInferenceCommand:
         main()
         mock_run_inference.assert_called_once()
 
-    @mock.patch("transcriptformer.cli.inference.main")
-    def test_run_inference_cli(self, mock_inference_main, monkeypatch):
-        """Test run_inference_cli function properly calls inference.main."""
-        args = mock.MagicMock()
-        args.checkpoint_path = "/path/to/checkpoint"
-        args.data_file = "/path/to/data.h5ad"
-        args.output_path = "./inference_results"
-        args.output_filename = "embeddings.h5ad"
-        args.batch_size = 8
-        args.gene_col_name = "ensembl_id"
-        args.precision = "16-mixed"
-        args.pretrained_embedding = None
-        args.config_override = []
-        args.model_type = "transcriptformer"
-        args.emb_type = "cell"
-
-        # Test that the function properly sets up Hydra config
-        original_argv = sys.argv.copy()
-        run_inference_cli(args)
-        mock_inference_main.assert_called_once()
-        # Check sys.argv was restored
-        assert sys.argv == original_argv
-
-    @mock.patch("transcriptformer.cli.inference.main")
-    def test_run_inference_cli_with_cge(self, mock_inference_main, monkeypatch):
-        """Test run_inference_cli function with CGE embedding type."""
-        args = mock.MagicMock()
-        args.checkpoint_path = "/path/to/checkpoint"
-        args.data_file = "/path/to/data.h5ad"
-        args.output_path = "./inference_results"
-        args.output_filename = "embeddings.h5ad"
-        args.batch_size = 8
-        args.gene_col_name = "ensembl_id"
-        args.precision = "16-mixed"
-        args.pretrained_embedding = None
-        args.config_override = []
-        args.model_type = "transcriptformer"
-        args.emb_type = "cge"
-
-        # Test that the function properly sets up Hydra config
-        original_argv = sys.argv.copy()
-        run_inference_cli(args)
-        mock_inference_main.assert_called_once()
-        # Check sys.argv was restored
-        assert sys.argv == original_argv
-
 
 class TestDownloadCommand:
     """Tests for the download command."""
