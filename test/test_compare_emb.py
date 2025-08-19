@@ -36,7 +36,10 @@ def compare_embeddings(file1, file2, tolerance=1e-5):
         if "embedding" not in adata1.obsm:
             missing.append(f"'embedding' not found in {file1}")
         if "embedding" not in adata2.obsm:
-            missing.append(f"'embedding' not found in {file2}")
+        if "embeddings" not in adata1.obsm:
+            missing.append(f"'embeddings' not found in {file1}")
+        if "embeddings" not in adata2.obsm:
+            missing.append(f"'embeddings' not found in {file2}")
         print(f"Error: {', '.join(missing)}")
         return False
 
