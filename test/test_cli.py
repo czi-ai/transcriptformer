@@ -8,7 +8,6 @@ import pytest
 from transcriptformer.cli import (
     main,
     run_download_cli,
-    run_inference_cli,
     setup_download_parser,
     setup_inference_parser,
 )

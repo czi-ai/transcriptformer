@@ -605,7 +605,7 @@ class AnnDatasetOOM(Dataset):
         # Some backed sparse implementations use __getitem__ returning 2D; ensure 1D
         x_row = X[row]
         # Only convert to dense if the row is actually sparse
-        if isinstance(x_row, (csr_matrix, csc_matrix)):
+        if isinstance(x_row, csr_matrix | csc_matrix):
             x_row = x_row.toarray().ravel()
         else:
             x_row = np.asarray(x_row).ravel()
