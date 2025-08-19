@@ -602,7 +602,11 @@ class AnnDatasetOOM(Dataset):
         X = self._X_per_file[file_id]
         # Some backed sparse implementations use __getitem__ returning 2D; ensure 1D
         x_row = X[row]
-        x_row = x_row.toarray().ravel() if hasattr(x_row, "toarray") else np.asarray(x_row).ravel()
+        # Only convert to dense if the row is actually sparse
+        if isinstance(x_row, (csr_matrix, csc_matrix)):
+            x_row = x_row.toarray().ravel()
+        else:
+            x_row = np.asarray(x_row).ravel()
         if filter_idx is not None:
             x_row = x_row[filter_idx]
 
