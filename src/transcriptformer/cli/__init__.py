@@ -352,7 +352,10 @@ def run_inference_cli(args):
 
     # Check if we're in a distributed environment
     if is_distributed:
-        rank = torch.distributed.get_rank()
+        if torch.distributed.is_initialized():
+            rank = torch.distributed.get_rank()
+        else:
+            rank = 0
 
         # Split the filename and add rank before extension
         rank_file = save_file.replace(".h5ad", f"_{rank}.h5ad")
