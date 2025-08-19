@@ -234,7 +234,9 @@ def load_gene_features(
     try:
         # Select the appropriate var depending on which matrix will be used
         using_raw = bool(use_raw is True or (use_raw is None and getattr(adata, "raw", None) is not None))
-        var_df = adata.raw.var if using_raw and getattr(adata, "raw", None) is not None else adata.var
+        has_raw = getattr(adata, "raw", None) is not None
+        using_raw = bool(use_raw is True or (use_raw is None and has_raw))
+        var_df = adata.raw.var if using_raw and has_raw else adata.var
 
         # Prefer requested column; otherwise use index which aligns with matrix columns for that layer
         if gene_col_name in var_df.columns:
