@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/czi-ai/transcriptformer/compare/v0.5.0...v0.6.0) (2025-08-20)
+
+
+### Features
+
+* support for multi-gpu inference and OOM datasets ([#53](https://github.com/czi-ai/transcriptformer/issues/53)) ([1d0012c](https://github.com/czi-ai/transcriptformer/commit/1d0012caa7eb3e1dc5ecef607e3f47a3d56fc04e))
+
 ## [0.5.0](https://github.com/czi-ai/transcriptformer/compare/v0.4.2...v0.5.0) (2025-08-11)
 
 
