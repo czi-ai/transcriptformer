@@ -1,10 +1,13 @@
+import json
 import logging
+import os
 import pickle
 
 import h5py
 import numpy as np
 import pandas as pd
 import torch
+from omegaconf import OmegaConf
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -101,3 +104,74 @@ def filter_minimum_class(
     y_filtered = y[valid_indices]
 
     return X_filtered, pd.Categorical(y_filtered)
+
+
+def merge_checkpoint_with_cfg(checkpoint_path: str, base_cfg):
+    """Merge checkpoint config.json with a provided base cfg (YAML + overrides).
+
+    The merge order matches the CLI behavior:
+    - Start from checkpoint config (mlflow_cfg)
+    - Merge base_cfg on top (YAML + any overrides)
+    - Set derived paths consistently
+    """
+    # Load model config from checkpoint
+    config_path = os.path.join(checkpoint_path, "config.json")
+    with open(config_path) as f:
+        model_config = json.load(f)
+    mlflow_cfg = OmegaConf.create(model_config)
+
+    # Merge: checkpoint first, then base cfg overrides
+    cfg = OmegaConf.merge(mlflow_cfg, base_cfg)
+
+    # Set derived paths
+    cfg.model.inference_config.load_checkpoint = os.path.join(checkpoint_path, "model_weights.pt")
+    cfg.model.data_config.aux_vocab_path = os.path.join(checkpoint_path, "vocabs")
+    cfg.model.data_config.esm2_mappings_path = os.path.join(checkpoint_path, "vocabs")
+    cfg.model.inference_config.checkpoint_path = checkpoint_path
+
+    return cfg
+
+
+def print_progress(current: int, total: int, prefix: str = "", suffix: str = "", length: int = 50) -> None:
+    """Print a simple ASCII progress bar.
+
+    Args:
+        current: Current progress value
+        total: Total value representing 100%
+        prefix: Text prefix to display before the bar
+        suffix: Text suffix to display after the percentage
+        length: Character length of the bar
+    """
+    filled = int(length * current / total) if total > 0 else 0
+    bar = "#" * filled + "-" * (length - filled)
+    percent = int(100 * current / total) if total > 0 else 0
+    print(f"\r{prefix} |{bar}| {percent}% {suffix}", end="", flush=True)
+    if total > 0 and current >= total:
+        print()
+
+
+class ProgressTracker:
+    """Rate-limited progress tracker to avoid excessive stdout updates."""
+
+    def __init__(self, prefix: str = "", min_update_interval: float = 0.1):
+        self.prefix = prefix
+        self.min_update_interval = min_update_interval
+        self.last_update_time = 0.0
+        self.last_percent = -1
+
+    def update(self, current: int, total: int) -> None:
+        import time
+
+        now = time.time()
+        current_percent = int(100 * current / total) if total > 0 else 0
+
+        should_update = (
+            now - self.last_update_time >= self.min_update_interval
+            or current_percent - self.last_percent >= 2
+            or (total > 0 and current >= total)
+        )
+
+        if should_update:
+            print_progress(current, total, prefix=self.prefix)
+            self.last_update_time = now
+            self.last_percent = current_percent

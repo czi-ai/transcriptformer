@@ -294,7 +294,7 @@ def run_inference_cli(args):
     cfg.model.inference_config.output_path = args.output_path
     cfg.model.inference_config.output_filename = args.output_filename
     cfg.model.inference_config.precision = args.precision
-    cfg.model.model_type = args.model_type
+    cfg.model.inference_config.model_type = args.model_type
     cfg.model.inference_config.emb_type = args.emb_type
     cfg.model.data_config.remove_duplicate_genes = args.remove_duplicate_genes
     cfg.model.data_config.use_raw = args.use_raw

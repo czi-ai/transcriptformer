@@ -3,7 +3,6 @@ defaults:
 
 model:
   checkpoint_path: null # Path to the model checkpoint directory
-  model_type: "transcriptformer" # Add default value here
 
   inference_config: # inference settings
     _target_: transcriptformer.data.dataclasses.InferenceConfig
@@ -17,6 +16,7 @@ model:
       # - tissue  # Uncomment to only return tissue column
     data_files:
       - test/data/human_val.h5ad # Path to input AnnData file(s)
+    checkpoint_path: null # Path to model checkpoint directory
     output_path: ./inference_results # Directory where results will be saved
     output_filename: embeddings.h5ad # Filename for the output embeddings
     load_checkpoint: null # Path to model weights file (automatically set by inference.py)
@@ -25,6 +25,7 @@ model:
     emb_type: cell # Type of embeddings to extract: "cell" for mean-pooled cell embeddings or "cge" for contextual gene embeddings
     num_gpus: 1 # Number of GPUs to use for inference (1 = single GPU, -1 = all available GPUs, >1 = specific number)
     use_oom_dataloader: false # Use OOM-safe map-style DataLoader with DistributedSampler
+    model_type: "transcriptformer" # Type of model to use for inference
 
   data_config:
     _target_: transcriptformer.data.dataclasses.DataConfig

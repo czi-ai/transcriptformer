@@ -175,11 +175,13 @@ class InferenceConfig:
         data_files (list): Data files for inference
         num_nodes (int): Number of nodes
         load_checkpoint (str): Path to checkpoint to load
+        checkpoint_path (str): Path to model checkpoint directory
         output_path (str): Path to save outputs
         output_filename (str): Filename for the output embeddings (default: embeddings.h5ad)
         num_gpus (int): Number of GPUs to use for inference (1 = single GPU, -1 = all available GPUs, >1 = specific number) (default: 1)
         special_tokens (list): Special tokens to use
-        emb_type (str): Type of embeddings to extract - "cell" for mean-pooled cell embeddings or "cge" for contextual gene embeddings (default: "cell")
+        emb_type (str): Type of embeddings to extract - "cell" for mean-pooled cell embeddings, "cge" for contextual gene embeddings (default: "cell")
+        model_type (str): Type of model to use for inference (default: "transcriptformer")
     """
 
     output_keys: list
@@ -187,7 +189,8 @@ class InferenceConfig:
     obs_keys: list
     data_files: list | None
     load_checkpoint: str | None
-    output_path: str | None
+    checkpoint_path: str | None = None
+    output_path: str | None = None
     output_filename: str | None = "embeddings.h5ad"
     num_gpus: int = 1
     num_nodes: int = 1
@@ -196,10 +199,13 @@ class InferenceConfig:
     special_tokens: list = field(default_factory=list)
     pretrained_embedding: list = field(default_factory=list)
     emb_type: str = "cell"
+    model_type: str = "transcriptformer"
 
     def __post_init__(self):
         if self.emb_type not in {"cell", "cge"}:
             raise ValueError("emb_type must be either 'cell' or 'cge'")
+        if self.model_type not in {"transcriptformer", "esm2ce"}:
+            raise ValueError("model_type must be either 'transcriptformer' or 'esm2ce'")
 
 
 @dataclass

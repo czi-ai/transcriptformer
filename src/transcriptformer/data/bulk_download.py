@@ -32,6 +32,8 @@ from typing import Any
 
 import requests
 
+from transcriptformer.utils.utils import ProgressTracker
+
 # Suppress annoying warnings
 warnings.filterwarnings("ignore", category=FutureWarning, module="anndata")
 warnings.filterwarnings("ignore", category=FutureWarning, message=".*read_.*from.*anndata.*deprecated.*")
@@ -86,17 +88,17 @@ def download_single_dataset(dataset_info: dict[str, Any], save_path: Path, max_r
                 with open(output_file, "wb") as file:
                     downloaded = 0
                     chunk_size = 8 * 1024 * 1024  # 8MB chunks
+                    tracker = ProgressTracker(prefix=f"Downloading {dataset_id}")
 
                     for chunk in response.iter_content(chunk_size=chunk_size):
                         if chunk:
                             file.write(chunk)
                             downloaded += len(chunk)
-
                             if total_size > 0:
-                                progress = (downloaded / total_size) * 100
-                                print(f"\r{dataset_id}: {progress:.1f}% downloaded", end="", flush=True)
+                                tracker.update(downloaded, total_size)
 
-                print()  # New line after progress
+                if total_size > 0:
+                    tracker.update(total_size, total_size)
 
                 # Mark download as successful
                 success_file.write_text("success")

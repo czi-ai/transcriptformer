@@ -48,7 +48,7 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
     (gene_vocab, aux_vocab), emb_matrix = load_vocabs_and_embeddings(cfg)
 
     # Determine model class based on config
-    model_type = cfg.model.get("model_type", "transcriptformer")  # Default to transcriptformer if not set
+    model_type = getattr(cfg.model.inference_config, "model_type", "transcriptformer")
     if model_type == "esm2ce":
         from transcriptformer.model.model import ESM2CE as ModelClass
 

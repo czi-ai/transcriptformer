@@ -248,7 +248,7 @@ transcriptformer inference \
 ```
 
 You can also use the CLI it run inference on the ESM2-CE baseline model discussed in the paper:
-
+```
 transcriptformer inference \
   --checkpoint-path ./checkpoints/tf_sapiens \
   --data-file test/data/human_val.h5ad \
@@ -275,6 +275,36 @@ transcriptformer inference --help
 transcriptformer download --help
 transcriptformer download-data --help
 ```
+
+## Using the Python Client
+
+You can also run inference and downloads programmatically with the Python client. This returns an in-memory AnnData object for direct use in notebooks and pipelines.
+
+```python
+from transcriptformer.client.client import TranscriptFormerClient
+
+tf = TranscriptFormerClient()
+
+# In-memory inference (single GPU only)
+adata = tf.inference(
+    data_file="./data/my_data.h5ad",
+    checkpoint_path="./checkpoints/tf_sapiens",
+    batch_size=16,
+    use_oom_dataloader=True,  # optional: OOM-safe dataloader
+    n_data_workers=4,         # optional
+)
+
+# Optional: download artifacts
+tf.download_model("tf-sapiens", checkpoint_dir="./checkpoints")
+
+# Optional: download datasets
+tf.download_data(["homo sapiens"], output_dir="./data/cellxgene")
+```
+
+Notes:
+- The Python client currently supports single-GPU inference only. If you need multi-GPU (DDP), use the CLI (`--num-gpus`).
+- Most `InferenceConfig` and `DataConfig` options are available as keyword args (e.g., `output_keys`, `obs_keys`, `gene_col_name`, `use_raw`, `clip_counts`).
+- Pass real booleans for flags like `use_oom_dataloader`.
 
 ### CLI Options for `inference`:
 

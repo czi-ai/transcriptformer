@@ -42,7 +42,6 @@ The downloaded models will be extracted to:
 """
 
 import argparse
-import math
 import sys
 import tarfile
 import tempfile
@@ -50,15 +49,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-
-def print_progress(current, total, prefix="", suffix="", length=50):
-    """Print a simple progress bar."""
-    filled = int(length * current / total)
-    bar = "█" * filled + "░" * (length - filled)
-    percent = math.floor(100 * current / total)
-    print(f"\r{prefix} |{bar}| {percent}% {suffix}", end="", flush=True)
-    if current == total:
-        print()
+from transcriptformer.utils.utils import ProgressTracker, print_progress
 
 
 def download_and_extract(model_name: str, checkpoint_dir: str = "./checkpoints"):
@@ -74,7 +65,7 @@ def download_and_extract(model_name: str, checkpoint_dir: str = "./checkpoints")
     try:
         # Create a temporary file to store the tar.gz
         with tempfile.NamedTemporaryFile(suffix=".tar.gz") as tmp_file:
-            # Download the file using urllib with progress bar
+            # Download the file using urllib with optimized progress bar
             try:
 
                 def report_hook(count, block_size, total_size):
@@ -107,13 +98,16 @@ def download_and_extract(model_name: str, checkpoint_dir: str = "./checkpoints")
                 with tarfile.open(fileobj=tmp_file, mode="r:gz") as tar:
                     members = tar.getmembers()
                     total_files = len(members)
+
+                    # Create progress tracker for extraction
+                    extract_tracker = ProgressTracker(
+                        prefix=f"Extracting {model_name}",
+                        min_update_interval=0.05,  # Faster updates for file extraction
+                    )
+
                     for i, member in enumerate(members, 1):
                         tar.extract(member, path=str(output_dir.parent))
-                        print_progress(
-                            i,
-                            total_files,
-                            prefix=f"Extracting {model_name}",
-                        )
+                        extract_tracker.update(i, total_files)
                 print()  # New line after extraction completes
             except tarfile.ReadError:
                 print(f"Error: The downloaded file for {model_name} is not a valid tar.gz archive")
