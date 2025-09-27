@@ -7,7 +7,14 @@ Example usage:
   model.inference_config.data_files.0=test/data/human_val.h5ad \
   model.inference_config.output_path=./custom_results_dir \
   model.inference_config.output_filename=custom_embeddings.h5ad \
-  model.inference_config.batch_size=8
+  model.inference_config.batch_size=8 \
+  model.inference_config.device=cuda
+
+Device options:
+  - auto: Automatically select best available device (default)
+  - cpu: Force CPU usage
+  - cuda: Force CUDA/GPU usage (requires CUDA availability)
+  - mps: Force MPS usage for Apple Silicon
 """
 
 import json
