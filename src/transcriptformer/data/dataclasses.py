@@ -32,6 +32,7 @@ class ModelConfig:
         block_len (int): Block length for Flex attention (default: 128)
         use_aux (bool): Use auxiliary inputs flag (default: false)
         gene_head_hidden_dim (int): Gene head hidden dimension (default: 2048)
+        compile_block_mask (bool): Whether to compile block mask creation for performance (default: true)
     """
 
     log_counts_eps: float
@@ -52,6 +53,7 @@ class ModelConfig:
     # Optional fields
     gene_head_hidden_dim: int = 2048
     use_aux: bool = False
+    compile_block_mask: bool = True
 
     def __post_init__(self):
         if (self.seq_len + self.aux_len) % self.block_len != 0:
@@ -178,6 +180,7 @@ class InferenceConfig:
         output_path (str): Path to save outputs
         output_filename (str): Filename for the output embeddings (default: embeddings.h5ad)
         num_gpus (int): Number of GPUs to use for inference (1 = single GPU, -1 = all available GPUs, >1 = specific number) (default: 1)
+        device (str): Specific device to use for inference ("auto", "cpu", "cuda", "mps") (default: "auto")
         special_tokens (list): Special tokens to use
         emb_type (str): Type of embeddings to extract - "cell" for mean-pooled cell embeddings or "cge" for contextual gene embeddings (default: "cell")
     """
@@ -190,6 +193,7 @@ class InferenceConfig:
     output_path: str | None
     output_filename: str | None = "embeddings.h5ad"
     num_gpus: int = 1
+    device: str = "auto"
     num_nodes: int = 1
     use_oom_dataloader: bool = False
     precision: str = "16-mixed"
@@ -200,6 +204,8 @@ class InferenceConfig:
     def __post_init__(self):
         if self.emb_type not in {"cell", "cge"}:
             raise ValueError("emb_type must be either 'cell' or 'cge'")
+        if self.device not in {"auto", "cpu", "cuda", "mps"}:
+            raise ValueError("device must be one of ['auto', 'cpu', 'cuda', 'mps']")
 
 
 @dataclass
