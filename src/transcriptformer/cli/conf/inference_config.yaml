@@ -24,6 +24,7 @@ model:
     precision: 16-mixed # Numerical precision for inference (16-mixed, 32, etc.)
     emb_type: cell # Type of embeddings to extract: "cell" for mean-pooled cell embeddings or "cge" for contextual gene embeddings
     num_gpus: 1 # Number of GPUs to use for inference (1 = single GPU, -1 = all available GPUs, >1 = specific number)
+    device: auto # Specific device to use: "auto" (best available), "cpu", "cuda", "mps"
     use_oom_dataloader: false # Use OOM-safe map-style DataLoader with DistributedSampler
 
   data_config:
