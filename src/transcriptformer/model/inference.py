@@ -83,8 +83,24 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
         )
 
     logging.info("Loading model checkpoint")
-    # Instead of loading full checkpoint, just load weights
-    state_dict = torch.load(cfg.model.inference_config.load_checkpoint, weights_only=True)
+    # Determine target device for loading checkpoint
+    device_preference = getattr(cfg.model.inference_config, "device", "auto")
+    if device_preference == "cpu":
+        map_location = "cpu"
+    elif device_preference == "cuda":
+        map_location = "cuda" if torch.cuda.is_available() else "cpu"
+    elif device_preference == "mps":
+        map_location = "mps" if torch.backends.mps.is_available() else "cpu"
+    else:  # auto
+        if torch.cuda.is_available():
+            map_location = "cuda"
+        elif torch.backends.mps.is_available():
+            map_location = "mps"
+        else:
+            map_location = "cpu"
+
+    # Instead of loading full checkpoint, just load weights with proper device mapping
+    state_dict = torch.load(cfg.model.inference_config.load_checkpoint, weights_only=True, map_location=map_location)
 
     # Validate and load weights
     # converter.validate_loaded_weights(model, state_dict)
@@ -151,30 +167,69 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
         collate_fn=dataset.collate_fn,
     )
 
-    # Determine number of GPUs to use
+    # Determine device and accelerator based on user preference
+    device_preference = getattr(cfg.model.inference_config, "device", "auto")
     num_gpus = getattr(cfg.model.inference_config, "num_gpus", 1)
 
-    # Handle special cases for num_gpus
-    if num_gpus == -1:
-        # Use all available GPUs
-        devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
-        accelerator = "gpu" if torch.cuda.is_available() else "cpu"
-    elif num_gpus > 1:
-        # Use specified number of GPUs
-        available_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
-        if available_gpus < num_gpus:
-            logging.warning(
-                f"Requested {num_gpus} GPUs but only {available_gpus} available. Using {available_gpus} GPUs."
-            )
-            devices = available_gpus if available_gpus > 0 else 1
-            accelerator = "gpu" if available_gpus > 0 else "cpu"
-        else:
-            devices = num_gpus
-            accelerator = "gpu"
-    else:
-        # Use single GPU or CPU
+    # Handle device preference
+    if device_preference == "cpu":
+        # Force CPU usage
+        accelerator = "cpu"
         devices = 1
-        accelerator = "gpu" if torch.cuda.is_available() else "cpu"
+        logging.info("Forcing CPU usage based on device preference")
+    elif device_preference == "cuda":
+        # Force CUDA usage
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA requested but not available")
+        accelerator = "gpu"
+        if num_gpus == -1:
+            devices = torch.cuda.device_count()
+        elif num_gpus > 1:
+            available_gpus = torch.cuda.device_count()
+            if available_gpus < num_gpus:
+                logging.warning(
+                    f"Requested {num_gpus} CUDA devices but only {available_gpus} available. Using {available_gpus}."
+                )
+                devices = available_gpus
+            else:
+                devices = num_gpus
+        else:
+            devices = 1
+        logging.info(f"Forcing CUDA usage with {devices} device(s)")
+    elif device_preference == "mps":
+        # Force MPS usage (Apple Silicon)
+        if not torch.backends.mps.is_available():
+            raise RuntimeError("MPS requested but not available")
+        accelerator = "mps"
+        devices = 1  # MPS typically supports single device
+        logging.info("Forcing MPS usage for Apple Silicon")
+    else:  # device_preference == "auto"
+        # Auto-detect best available device (existing logic)
+        if num_gpus == -1:
+            # Use all available GPUs
+            devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
+            accelerator = "gpu" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
+        elif num_gpus > 1:
+            # Use specified number of GPUs
+            available_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+            if available_gpus < num_gpus:
+                logging.warning(
+                    f"Requested {num_gpus} GPUs but only {available_gpus} available. Using {available_gpus} GPUs."
+                )
+                devices = available_gpus if available_gpus > 0 else 1
+                accelerator = "gpu" if available_gpus > 0 else ("mps" if torch.backends.mps.is_available() else "cpu")
+            else:
+                devices = num_gpus
+                accelerator = "gpu"
+        else:
+            # Use single GPU or CPU
+            devices = 1
+            if torch.cuda.is_available():
+                accelerator = "gpu"
+            elif torch.backends.mps.is_available():
+                accelerator = "mps"
+            else:
+                accelerator = "cpu"
 
     logging.info(f"Using {devices} device(s) with accelerator: {accelerator}")
 
