@@ -32,9 +32,11 @@ def change_embedding_layer(
         [model.gene_vocab.vocab_dict[token] for token in old_special_tokens],
         dtype=torch.int64,
     )
-    # Move model to GPU - needed if model is not re-loaded from checkpoint
-    model = model.to("cuda")
-    old_special_token_embeddings = model.gene_embeddings.embedding(old_special_token_indices.to("cuda"))
+    # Move model to the appropriate device - needed if model is not re-loaded from checkpoint
+    # Get the device from the model's existing parameters
+    device = next(model.parameters()).device
+    model = model.to(device)
+    old_special_token_embeddings = model.gene_embeddings.embedding(old_special_token_indices.to(device))
 
     # Read the new embeddings from the files
     gene_vocab, new_embedding_matrix = construct_gene_embeddings(
@@ -44,7 +46,7 @@ def change_embedding_layer(
 
     # Concatenate the old special token embeddings with the new embeddings
     new_embedding_matrix = torch.cat(
-        [old_special_token_embeddings, torch.Tensor(new_embedding_matrix).to("cuda")],
+        [old_special_token_embeddings, torch.Tensor(new_embedding_matrix).to(device)],
         dim=0,
     )
 
