@@ -35,7 +35,7 @@ For more details, please refer to our manuscript: [A Cross-Species Generative Ce
 
 ## Installation
 
-Transcriptformer requires Python >=3.11.
+Transcriptformer requires Python >=3.11. Instruction below is based on [*uv* package manager (install instruction here)](https://docs.astral.sh/uv/getting-started/installation/).
 
 ### Install from PyPI
 
