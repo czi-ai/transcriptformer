@@ -134,6 +134,7 @@ class Transcriptformer(pl.LightningModule):
             activation=self.model_config.activation,
             attn_bias=self.model_config.attn_bias,
             fw_bias=self.model_config.fw_bias,
+            compile_attention=self.model_config.compile_block_mask,
         )
 
     def _init_count_heads(self):
@@ -302,8 +303,9 @@ class Transcriptformer(pl.LightningModule):
             H=None,
             Q_LEN=right_shifted_gene_embeddings.shape[1],
             KV_LEN=right_shifted_gene_embeddings.shape[1],
+            device=right_shifted_gene_embeddings.device,
             BLOCK_SIZE=self.model_config.block_len,
-            _compile=True,
+            _compile=self.model_config.compile_block_mask,
         )
 
         # Score mode
