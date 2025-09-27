@@ -42,7 +42,7 @@ class MultiHeadSelfFlexAttn(nn.Module):
 
     """
 
-    def __init__(self, d_model: int, nheads: int, bias: bool = False):
+    def __init__(self, d_model: int, nheads: int, bias: bool = False, compile_attention: bool = True):
         super().__init__()
         assert d_model % nheads == 0, "d_model must be divisible by number of heads"
 
@@ -50,7 +50,12 @@ class MultiHeadSelfFlexAttn(nn.Module):
         self.d_k = d_model // nheads
         self.h = nheads
         self.linears = clones(nn.Linear(d_model, d_model, bias=bias), 4)
-        self.self_attn = torch.compile(flex_attention, fullgraph=True)
+
+        # Use compiled or uncompiled flex_attention based on config
+        if compile_attention:
+            self.self_attn = torch.compile(flex_attention, fullgraph=True)
+        else:
+            self.self_attn = flex_attention
 
     def forward(self, inp, score_mod=None, block_mask=None, **kwargs):
         """Forward pass of the MultiHeadSelfFlexAttn."""
@@ -109,12 +114,13 @@ class FlexAttnTransformerLayer(nn.Module):
         fw_bias: bool = False,
         attn_bias: bool = False,
         activation: str = "gelu",
+        compile_attention: bool = True,
     ):
         super().__init__()
 
         self.linear1 = nn.Linear(d_model, dim_fw, bias=fw_bias)
         self.linear2 = nn.Linear(dim_fw, d_model, bias=fw_bias)
-        self.self_attn = MultiHeadSelfFlexAttn(d_model, nhead, bias=attn_bias)
+        self.self_attn = MultiHeadSelfFlexAttn(d_model, nhead, bias=attn_bias, compile_attention=compile_attention)
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
@@ -177,6 +183,7 @@ class TranscriptEncoder(nn.Module):
         activation: str = "gelu",
         attn_bias: bool = False,
         fw_bias: bool = False,
+        compile_attention: bool = True,
     ):
         super().__init__()
         self.nlayers = nlayers
@@ -192,6 +199,7 @@ class TranscriptEncoder(nn.Module):
                     fw_bias=fw_bias,
                     attn_bias=attn_bias,
                     activation=activation,
+                    compile_attention=compile_attention,
                 )
                 for _ in range(nlayers)
             ]
