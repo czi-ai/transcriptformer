@@ -25,6 +25,8 @@ Common Options for Inference:
     --precision            Numerical precision (16-mixed or 32)
     --pretrained-embedding Path to embedding file for out-of-distribution species
     --num-gpus             Number of GPUs to use (1=single, -1=all available, >1=specific number)
+    --device               Specific device to use (auto, cpu, cuda, mps)
+    --disable-compile-block-mask  Disable block mask compilation (useful for CPU/debugging)
 
 Advanced Configuration:
     Use --config-override for any configuration options not exposed as arguments above.
@@ -39,6 +41,10 @@ Examples
     transcriptformer inference --checkpoint-path ./checkpoints/tf_sapiens --data-file ./data/my_data.h5ad \
       --output-path ./custom_output_dir --output-filename custom_output.h5ad \
       --batch-size 16 --gene-col-name gene_id --precision 32
+
+    # Run inference with specific device and disable compilation for CPU
+    transcriptformer inference --checkpoint-path ./checkpoints/tf_sapiens --data-file ./data/my_data.h5ad \
+      --device cpu --emb-type cge --output-filename cge_embeddings.h5ad --disable-compile-block-mask
 
     # Run inference with advanced configuration overrides
     transcriptformer inference --checkpoint-path ./checkpoints/tf_sapiens --data-file ./data/my_data.h5ad \
@@ -179,6 +185,18 @@ def setup_inference_parser(subparsers):
         help="Number of GPUs to use for inference (1 = single GPU, -1 = all available GPUs, >1 = specific number) (default: 1)",
     )
     parser.add_argument(
+        "--device",
+        default="auto",
+        choices=["auto", "cpu", "cuda", "mps"],
+        help="Specific device to use for inference: 'auto' (best available), 'cpu', 'cuda', 'mps' (default: auto)",
+    )
+    parser.add_argument(
+        "--disable-compile-block-mask",
+        action="store_true",
+        default=False,
+        help="Disable compilation of block mask creation (useful for CPU or debugging)",
+    )
+    parser.add_argument(
         "--oom-dataloader",
         action="store_true",
         default=False,
@@ -299,10 +317,12 @@ def run_inference_cli(args):
     cfg.model.data_config.remove_duplicate_genes = args.remove_duplicate_genes
     cfg.model.data_config.use_raw = args.use_raw
     cfg.model.inference_config.num_gpus = args.num_gpus
+    cfg.model.inference_config.device = args.device
     cfg.model.inference_config.use_oom_dataloader = args.oom_dataloader
     cfg.model.data_config.clip_counts = args.clip_counts
     cfg.model.data_config.filter_to_vocabs = args.filter_to_vocabs
     cfg.model.data_config.n_data_workers = args.n_data_workers
+    cfg.model.model_config.compile_block_mask = not args.disable_compile_block_mask
 
     # Add pretrained embedding if specified
     if args.pretrained_embedding:
