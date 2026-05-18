@@ -1,0 +1,73 @@
+defaults:
+  - _self_  # Load the current config file
+
+train:
+  # === Checkpointing & Output ===
+  checkpoint_dir: null         # Path to source checkpoint directory (required)
+  resume_artifact_dir: null    # Path to previous training output for resuming (optional)
+  resume_mode: weights         # 'weights' (load weights only) or 'lightning' (resume full state)
+  output_dir: ./train_outputs/tf_assay_expanded  # Output directory for new artifacts
+
+  checkpoint:
+    save_top_k: 1              # Number of best checkpoints to keep (by val/total_loss)
+    save_last: true            # Always save the last checkpoint
+
+  live_metrics:
+    enabled: true              # Export per-epoch summaries and live plots while training
+    every_n_epochs: 1          # Refresh metrics/plots every N epochs
+
+  # === Data ===
+  train_files: []              # List of training .h5ad files
+  val_files: []                # List of validation .h5ad files
+  expanded_assay_vocab: null   # Path to expanded assay vocab JSON (optional)
+  obs_assay_col: assay         # AnnData.obs column for assay tokens
+  gene_col_name: ensembl_id    # AnnData.var column for gene IDs
+
+  # === Dataloader ===
+  batch_size: 8                # Batch size
+  num_workers: 4               # DataLoader workers
+  use_oom_dataloader: false    # Use OOM-safe DataLoader
+
+
+  # === Training Loop ===
+  # Recommended: Aim for a global batch size of 4–5 million tokens (examples * seq_len * devices * accumulate_grad_batches)
+  max_epochs: 5                # Number of epochs
+  precision: 16-mixed          # Precision (16-mixed, 32, bf16, etc.)
+  devices: 1                   # Number of devices (int or 'auto')
+  num_nodes: 1                 # Number of nodes (for DDP)
+  accelerator: auto            # Accelerator type ('auto', 'cpu', 'cuda')
+  log_every_n_steps: 10        # Logging frequency
+  seed: 42                     # Random seed
+  gradient_clip_val: 1.0       # Max norm for gradient clipping (improves stability)
+  accumulate_grad_batches: 6   # Number of steps to accumulate gradients before optimizer step
+
+  # === Optimizer & Scheduler ===
+  lr: 5.5e-5                   # Learning rate, try 1.5e-4 if train from scratch
+  weight_decay: 0.05           # AdamW weight decay, try 0.1 if train from scratch
+  adam_beta1: 0.9              # AdamW beta1
+  adam_beta2: 0.95             # AdamW beta2
+  adam_eps: 1e-8               # AdamW epsilon
+  warmup_ratio: 0.1            # LR warmup ratio
+  min_lr_ratio: 0.18            # Minimum LR as fraction of initial, cap at 1e-5
+
+  # === Loss Weights ===
+  gene_loss_weight: 1.0        # Weight for gene prediction loss
+  count_loss_weight: 1.0       # Weight for count prediction loss
+
+  # === Assay Embedding Init ===
+  init_default_source: unknown  # Default source for new assay tokens
+  assay_init_map: []           # List of 'new=source' mappings
+
+  # === Freezing & Training Policy ===
+  freeze_transformer: false    # Freeze transformer encoder
+  freeze_gene_embeddings: false # Freeze gene embeddings
+  freeze_count_head: false     # Freeze count decoder
+  freeze_gene_head: false      # Freeze gene decoder
+  train_aux_only: false        # Train only aux (assay) embeddings
+
+  # === Data Preprocessing ===
+  shuffle_expressed_each_batch: false # Shuffle expressed genes per batch
+  clip_counts: 30.0            # Max count value (clip)
+  normalize_to_scale: 0.0      # Normalize counts to this scale (0 = no normalization)
+  use_raw: false               # Use AnnData.raw.X if available
+  remove_duplicate_genes: false # Remove duplicate genes

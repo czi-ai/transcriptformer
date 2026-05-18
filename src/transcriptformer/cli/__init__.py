@@ -69,6 +69,7 @@ import torch
 from omegaconf import OmegaConf
 
 from transcriptformer.model.inference import run_inference
+from transcriptformer.train.engine import run_train_from_dict, setup_runtime_for_training
 
 # Suppress annoying warnings
 warnings.filterwarnings("ignore", category=FutureWarning, module="anndata")
@@ -284,6 +285,68 @@ def setup_download_data_parser(subparsers):
     )
 
 
+def setup_train_parser(subparsers):
+    """Setup the parser for the train command."""
+    parser = subparsers.add_parser(
+        "train",
+        help="Train or continue training with expanded assay vocab",
+        description="Fine-tune TranscriptFormer with expanded assay tokens and optional freezing.",
+    )
+
+    parser.add_argument("--checkpoint-dir", required=True, help="Base artifact directory with config.json/model_weights.pt")
+    parser.add_argument("--output-dir", required=True, help="Output artifact directory")
+    parser.add_argument("--train-file", action="append", required=True, help="Training .h5ad file (repeatable)")
+    parser.add_argument("--val-file", action="append", default=[], help="Validation .h5ad file (repeatable)")
+
+    parser.add_argument("--expanded-assay-vocab", help="Expanded assay_vocab.json path")
+    parser.add_argument("--obs-assay-col", default="assay", help="obs assay column")
+    parser.add_argument("--gene-col-name", default="ensembl_id", help="adata.var gene ID column")
+
+    parser.add_argument("--resume-artifact-dir", default=None, help="Resume from previous output artifact directory")
+    parser.add_argument(
+        "--resume-mode",
+        default="weights",
+        choices=["weights", "lightning"],
+        help="Resume mode: weights (supports runtime policy changes) or lightning (resume optimizer/scheduler state)",
+    )
+
+    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--num-workers", type=int, default=4)
+    parser.add_argument("--max-epochs", type=int, default=5)
+    parser.add_argument("--precision", default="16-mixed")
+    parser.add_argument("--devices", default="1")
+    parser.add_argument("--num-nodes", type=int, default=1)
+    parser.add_argument("--accelerator", default="auto")
+
+    parser.add_argument("--lr", type=float, default=5.5e-5)
+    parser.add_argument("--weight-decay", type=float, default=0.05)
+    parser.add_argument("--adam-beta1", type=float, default=0.9)
+    parser.add_argument("--adam-beta2", type=float, default=0.95)
+    parser.add_argument("--adam-eps", type=float, default=1e-8)
+    parser.add_argument("--warmup-ratio", type=float, default=0.1)
+    parser.add_argument("--min-lr-ratio", type=float, default=0.1)
+
+    parser.add_argument("--gene-loss-weight", type=float, default=1.0)
+    parser.add_argument("--count-loss-weight", type=float, default=1.0)
+
+    parser.add_argument("--init-default-source", default="unknown")
+    parser.add_argument("--assay-init-map", action="append", default=[], help="new_assay=source_assay mapping")
+
+    parser.add_argument("--freeze-transformer", action="store_true")
+    parser.add_argument("--freeze-gene-embeddings", action="store_true")
+    parser.add_argument("--freeze-count-head", action="store_true")
+    parser.add_argument("--freeze-gene-head", action="store_true")
+    parser.add_argument("--train-aux-only", action="store_true")
+
+    parser.add_argument("--shuffle-expressed-each-batch", action="store_true")
+    parser.add_argument("--clip-counts", type=float, default=30.0)
+    parser.add_argument("--normalize-to-scale", type=float, default=0.0)
+    parser.add_argument("--use-raw", action="store_true")
+    parser.add_argument("--remove-duplicate-genes", action="store_true")
+    parser.add_argument("--use-oom-dataloader", action="store_true")
+    parser.add_argument("--seed", type=int, default=42)
+
+
 def run_inference_cli(args):
     """Run inference using command line arguments."""
     # Only print logo if not in distributed mode (avoids duplicates)
@@ -452,6 +515,55 @@ def run_download_data_cli(args):
         sys.exit(1)
 
 
+def run_train_cli(args):
+    """Run training from CLI args."""
+    setup_runtime_for_training()
+    cfg = {
+        "checkpoint_dir": args.checkpoint_dir,
+        "resume_artifact_dir": args.resume_artifact_dir,
+        "resume_mode": args.resume_mode,
+        "output_dir": args.output_dir,
+        "train_files": args.train_file,
+        "val_files": args.val_file,
+        "expanded_assay_vocab": args.expanded_assay_vocab,
+        "obs_assay_col": args.obs_assay_col,
+        "gene_col_name": args.gene_col_name,
+        "batch_size": args.batch_size,
+        "num_workers": args.num_workers,
+        "max_epochs": args.max_epochs,
+        "precision": args.precision,
+        "devices": args.devices,
+        "num_nodes": args.num_nodes,
+        "accelerator": args.accelerator,
+        "lr": args.lr,
+        "weight_decay": args.weight_decay,
+        "adam_beta1": args.adam_beta1,
+        "adam_beta2": args.adam_beta2,
+        "adam_eps": args.adam_eps,
+        "warmup_ratio": args.warmup_ratio,
+        "min_lr_ratio": args.min_lr_ratio,
+        "gene_loss_weight": args.gene_loss_weight,
+        "count_loss_weight": args.count_loss_weight,
+        "init_default_source": args.init_default_source,
+        "assay_init_map": args.assay_init_map,
+        "freeze_transformer": args.freeze_transformer,
+        "freeze_gene_embeddings": args.freeze_gene_embeddings,
+        "freeze_count_head": args.freeze_count_head,
+        "freeze_gene_head": args.freeze_gene_head,
+        "train_aux_only": args.train_aux_only,
+        "shuffle_expressed_each_batch": args.shuffle_expressed_each_batch,
+        "clip_counts": args.clip_counts,
+        "normalize_to_scale": args.normalize_to_scale,
+        "use_raw": args.use_raw,
+        "remove_duplicate_genes": args.remove_duplicate_genes,
+        "use_oom_dataloader": args.use_oom_dataloader,
+        "seed": args.seed,
+    }
+
+    result = run_train_from_dict(cfg)
+    print(f"Training complete. Artifacts saved to {result['output_dir']}")
+
+
 def main():
     """Main entry point for the CLI."""
     parser = argparse.ArgumentParser(
@@ -465,6 +577,7 @@ def main():
     setup_inference_parser(subparsers)
     setup_download_parser(subparsers)
     setup_download_data_parser(subparsers)
+    setup_train_parser(subparsers)
 
     # Parse arguments
     args = parser.parse_args()
@@ -480,6 +593,8 @@ def main():
         run_download_cli(args)
     elif args.command == "download-data":
         run_download_data_cli(args)
+    elif args.command == "train":
+        run_train_cli(args)
 
 
 if __name__ == "__main__":
