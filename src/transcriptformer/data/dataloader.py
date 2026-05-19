@@ -283,6 +283,43 @@ def validate_gene_dimension(X: np.ndarray, gene_names: np.ndarray, gene_col_name
         )
 
 
+def compute_row_stats_chunked(
+    X_layer,
+    filter_idx: list[int] | None = None,
+    chunk_size: int = 1024,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute per-row expression sums and nonzero counts in chunks.
+
+    This avoids loading the full matrix into memory for backed AnnData layers.
+    """
+    n_rows = int(X_layer.shape[0])
+    expr_counts = np.zeros(n_rows, dtype=np.float64)
+    nnz_counts = np.zeros(n_rows, dtype=np.int32)
+
+    for start in range(0, n_rows, chunk_size):
+        end = min(start + chunk_size, n_rows)
+        block = X_layer[start:end]
+
+        if isinstance(block, csr_matrix | csc_matrix):
+            if filter_idx is not None:
+                block = block[:, filter_idx]
+            expr = np.asarray(block.sum(axis=1)).ravel()
+            nnz = np.asarray(block.getnnz(axis=1)).ravel()
+        else:
+            arr = np.asarray(block)
+            if arr.ndim == 1:
+                arr = arr.reshape(1, -1)
+            if filter_idx is not None:
+                arr = arr[:, filter_idx]
+            expr = arr.sum(axis=1)
+            nnz = (arr > 0).sum(axis=1)
+
+        expr_counts[start:end] = expr
+        nnz_counts[start:end] = nnz
+
+    return expr_counts, nnz_counts
+
+
 class AnnDataset(Dataset):
     def __init__(
         self,
@@ -328,6 +365,7 @@ class AnnDataset(Dataset):
         self.obs_keys = obs_keys
         self.use_raw = use_raw
         self.remove_duplicate_genes = remove_duplicate_genes
+        self.filter_metadata: list[dict] = []
 
         self.gene_tokenizer = BatchGeneTokenizer(gene_vocab)
         if aux_vocab is not None:
@@ -379,6 +417,9 @@ class AnnDataset(Dataset):
                 "If your data is normalized, consider using the original count matrix instead."
             )
 
+        original_gene_count = int(len(gene_names))
+        original_cell_count = int(X.shape[0])
+
         logging.info("Applying filters")
         vocab = self.gene_vocab
         X, obs, gene_names = apply_filters(
@@ -393,8 +434,37 @@ class AnnDataset(Dataset):
         )
 
         if X is None:
+            self.filter_metadata.append(
+                {
+                    "file": file_path,
+                    "original_genes": original_gene_count,
+                    "kept_genes": 0,
+                    "removed_genes": original_gene_count,
+                    "original_cells": original_cell_count,
+                    "kept_cells": 0,
+                    "removed_cells": original_cell_count,
+                    "filter_to_vocab": bool(self.filter_to_vocab),
+                    "filter_outliers": float(self.filter_outliers),
+                    "min_expressed_genes": int(self.min_expressed_genes),
+                }
+            )
             logging.warning(f"Data was filtered out completely for {file_path}")
             return None
+
+        self.filter_metadata.append(
+            {
+                "file": file_path,
+                "original_genes": original_gene_count,
+                "kept_genes": int(len(gene_names)),
+                "removed_genes": int(original_gene_count - len(gene_names)),
+                "original_cells": original_cell_count,
+                "kept_cells": int(X.shape[0]),
+                "removed_cells": int(original_cell_count - X.shape[0]),
+                "filter_to_vocab": bool(self.filter_to_vocab),
+                "filter_outliers": float(self.filter_outliers),
+                "min_expressed_genes": int(self.min_expressed_genes),
+            }
+        )
 
         logging.info("Processing data")
         batch = process_batch(
@@ -525,10 +595,13 @@ class AnnDatasetOOM(Dataset):
         pad_token: str = "[PAD]",
         gene_col_name: str = "ensembl_id",
         filter_to_vocab: bool = True,
+        filter_outliers: float = 0.0,
+        min_expressed_genes: int = 0,
         clip_counts: float = 1e10,
         obs_keys: list[str] | None = None,
         use_raw: bool | None = None,
         remove_duplicate_genes: bool = False,
+        stats_chunk_size: int = 1024,
     ):
         super().__init__()
         self.files_list = files_list
@@ -543,10 +616,14 @@ class AnnDatasetOOM(Dataset):
         self.pad_token = pad_token
         self.gene_col_name = gene_col_name
         self.filter_to_vocab = filter_to_vocab
+        self.filter_outliers = filter_outliers
+        self.min_expressed_genes = min_expressed_genes
         self.clip_counts = clip_counts
         self.obs_keys = obs_keys
         self.use_raw = use_raw
         self.remove_duplicate_genes = remove_duplicate_genes
+        self.stats_chunk_size = max(1, int(stats_chunk_size))
+        self.filter_metadata: list[dict] = []
 
         self.gene_tokenizer = BatchGeneTokenizer(gene_vocab)
         if aux_vocab is not None:
@@ -556,6 +633,7 @@ class AnnDatasetOOM(Dataset):
         self._handles: list[anndata.AnnData] = []
         self._gene_names_per_file: list[np.ndarray] = []
         self._filter_idx_per_file: list[list[int] | None] = []
+        self._keep_rows_per_file: list[np.ndarray] = []
         self._X_per_file: list = []
         self._n_rows: list[int] = []
         for file in self.files_list:
@@ -566,10 +644,13 @@ class AnnDatasetOOM(Dataset):
             )
             if not success:
                 raise ValueError(f"Failed to load gene features from {file_path}")
+
+            original_gene_count = int(len(gene_names))
+            original_cell_count = int(adata.n_obs)
+
             # Optional vocab filtering at token level
             filter_idx = None
             if self.filter_to_vocab:
-                original_gene_count = len(gene_names)
                 filter_idx = [i for i, name in enumerate(gene_names) if name in self.gene_vocab]
                 gene_names = gene_names[filter_idx]
                 logging.info(
@@ -578,12 +659,55 @@ class AnnDatasetOOM(Dataset):
                 if len(gene_names) == 0:
                     raise ValueError(f"No genes remaining after filtering for file {file_path}")
 
+            X_layer = get_counts_layer(adata, self.use_raw)
+            if self.filter_outliers > 0 or self.min_expressed_genes > 0:
+                expr_counts, nnz_counts = compute_row_stats_chunked(
+                    X_layer,
+                    filter_idx=filter_idx,
+                    chunk_size=self.stats_chunk_size,
+                )
+
+                keep_mask = np.ones(original_cell_count, dtype=bool)
+                if self.filter_outliers > 0:
+                    count_std = np.std(expr_counts)
+                    count_mean = np.mean(expr_counts)
+                    keep_mask &= (expr_counts > count_mean - count_std * self.filter_outliers) & (
+                        expr_counts < count_mean + count_std * self.filter_outliers
+                    )
+                if self.min_expressed_genes > 0:
+                    keep_mask &= nnz_counts >= self.min_expressed_genes
+
+                keep_rows = np.nonzero(keep_mask)[0].astype(np.int64)
+
+                logging.info(
+                    f"Filtered {original_cell_count} cells to {len(keep_rows)} cells for file {file_path}"
+                )
+            else:
+                keep_rows = np.arange(original_cell_count, dtype=np.int64)
+            if keep_rows.size == 0:
+                raise ValueError(f"No cells remaining after filtering for file {file_path}")
+
             self._handles.append(adata)
             self._gene_names_per_file.append(gene_names)
             self._filter_idx_per_file.append(filter_idx)
-            X_layer = get_counts_layer(adata, self.use_raw)
+            self._keep_rows_per_file.append(keep_rows)
             self._X_per_file.append(X_layer)
-            self._n_rows.append(int(adata.n_obs))
+            self._n_rows.append(int(keep_rows.size))
+
+            self.filter_metadata.append(
+                {
+                    "file": file_path,
+                    "original_genes": original_gene_count,
+                    "kept_genes": int(len(gene_names)),
+                    "removed_genes": int(original_gene_count - len(gene_names)),
+                    "original_cells": original_cell_count,
+                    "kept_cells": int(keep_rows.size),
+                    "removed_cells": int(original_cell_count - keep_rows.size),
+                    "filter_to_vocab": bool(self.filter_to_vocab),
+                    "filter_outliers": float(self.filter_outliers),
+                    "min_expressed_genes": int(self.min_expressed_genes),
+                }
+            )
 
         self._offsets = np.cumsum([0] + self._n_rows)
 
@@ -597,13 +721,14 @@ class AnnDatasetOOM(Dataset):
 
     def __getitem__(self, idx: int) -> BatchData:
         file_id, row = self._loc(idx)
+        actual_row = int(self._keep_rows_per_file[file_id][row])
         adata = self._handles[file_id]
         gene_names = self._gene_names_per_file[file_id]
         filter_idx = self._filter_idx_per_file[file_id]
 
         X = self._X_per_file[file_id]
         # Some backed sparse implementations use __getitem__ returning 2D; ensure 1D
-        x_row = X[row]
+        x_row = X[actual_row]
         # Only convert to dense if the row is actually sparse
         if isinstance(x_row, csr_matrix | csc_matrix):
             x_row = x_row.toarray().ravel()
@@ -612,7 +737,7 @@ class AnnDatasetOOM(Dataset):
         if filter_idx is not None:
             x_row = x_row[filter_idx]
 
-        obs_row = adata.obs.iloc[row : row + 1]
+        obs_row = adata.obs.iloc[actual_row : actual_row + 1]
 
         # Build a 1-row batch and reuse existing processing pipeline
         x_batch = np.expand_dims(x_row, axis=0)

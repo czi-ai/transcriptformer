@@ -301,6 +301,12 @@ def setup_train_parser(subparsers):
     parser.add_argument("--expanded-assay-vocab", help="Expanded assay_vocab.json path")
     parser.add_argument("--obs-assay-col", default="assay", help="obs assay column")
     parser.add_argument("--gene-col-name", default="ensembl_id", help="adata.var gene ID column")
+    parser.add_argument("--filter-to-vocabs", action="store_true", default=True, help="filter genes to vocabulary")
+    parser.add_argument("--filter-outliers", type=float, default=0.0, help="cell outlier filtering threshold")
+    parser.add_argument("--sort-genes", action="store_true", help="sort genes by expression")
+    parser.add_argument("--randomize-genes", action="store_true", help="randomize gene order")
+    parser.add_argument("--min-expressed-genes", type=int, default=0, help="minimum expressed genes per cell")
+    parser.add_argument("--n-data-workers", type=int, default=4, help="DataConfig n_data_workers value")
 
     parser.add_argument("--resume-artifact-dir", default=None, help="Resume from previous output artifact directory")
     parser.add_argument(
@@ -326,8 +332,8 @@ def setup_train_parser(subparsers):
     parser.add_argument("--warmup-ratio", type=float, default=0.1)
     parser.add_argument("--min-lr-ratio", type=float, default=0.1)
 
-    parser.add_argument("--gene-loss-weight", type=float, default=1.0)
-    parser.add_argument("--count-loss-weight", type=float, default=1.0)
+    parser.add_argument("--gene-id-loss-weight", type=float, default=1.0)
+    parser.add_argument("--softplus-approx", action=argparse.BooleanOptionalAction, default=True)
 
     parser.add_argument("--init-default-source", default="unknown")
     parser.add_argument("--assay-init-map", action="append", default=[], help="new_assay=source_assay mapping")
@@ -527,7 +533,19 @@ def run_train_cli(args):
         "val_files": args.val_file,
         "expanded_assay_vocab": args.expanded_assay_vocab,
         "obs_assay_col": args.obs_assay_col,
-        "gene_col_name": args.gene_col_name,
+        "data_config": {
+            "gene_col_name": args.gene_col_name,
+            "clip_counts": args.clip_counts,
+            "filter_to_vocabs": args.filter_to_vocabs,
+            "filter_outliers": args.filter_outliers,
+            "normalize_to_scale": args.normalize_to_scale,
+            "sort_genes": args.sort_genes,
+            "randomize_genes": args.randomize_genes,
+            "min_expressed_genes": args.min_expressed_genes,
+            "use_raw": args.use_raw,
+            "remove_duplicate_genes": args.remove_duplicate_genes,
+            "n_data_workers": args.n_data_workers,
+        },
         "batch_size": args.batch_size,
         "num_workers": args.num_workers,
         "max_epochs": args.max_epochs,
@@ -542,8 +560,10 @@ def run_train_cli(args):
         "adam_eps": args.adam_eps,
         "warmup_ratio": args.warmup_ratio,
         "min_lr_ratio": args.min_lr_ratio,
-        "gene_loss_weight": args.gene_loss_weight,
-        "count_loss_weight": args.count_loss_weight,
+        "loss_config": {
+            "gene_id_loss_weight": args.gene_id_loss_weight,
+            "softplus_approx": args.softplus_approx,
+        },
         "init_default_source": args.init_default_source,
         "assay_init_map": args.assay_init_map,
         "freeze_transformer": args.freeze_transformer,
@@ -552,10 +572,6 @@ def run_train_cli(args):
         "freeze_gene_head": args.freeze_gene_head,
         "train_aux_only": args.train_aux_only,
         "shuffle_expressed_each_batch": args.shuffle_expressed_each_batch,
-        "clip_counts": args.clip_counts,
-        "normalize_to_scale": args.normalize_to_scale,
-        "use_raw": args.use_raw,
-        "remove_duplicate_genes": args.remove_duplicate_genes,
         "use_oom_dataloader": args.use_oom_dataloader,
         "seed": args.seed,
     }

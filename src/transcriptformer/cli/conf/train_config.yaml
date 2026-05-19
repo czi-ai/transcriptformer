@@ -21,12 +21,25 @@ train:
   val_files: []                # List of validation .h5ad files
   expanded_assay_vocab: null   # Path to expanded assay vocab JSON (optional)
   obs_assay_col: assay         # AnnData.obs column for assay tokens
-  gene_col_name: ensembl_id    # AnnData.var column for gene IDs
+
+  data_config:
+    _target_: transcriptformer.data.dataclasses.DataConfig
+    gene_col_name: ensembl_id      # Column name in AnnData.var containing gene identifiers
+    clip_counts: 30.0              # Maximum count value (higher values will be clipped), Null means inherit from checkpoint model config
+    filter_to_vocabs: true         # Whether to filter genes to only those in the vocabulary, Null means inherit from checkpoint model config
+    filter_outliers: 3.0          # Standard deviation threshold for filtering outlier cells (0.0 = no filtering), Null means inherit from checkpoint model config
+    normalize_to_scale: 0.0        # Scale factor for count normalization (0 = no normalization)
+    sort_genes: null               # Whether to sort genes by expression level, Null means inherit from checkpoint model config
+    randomize_genes: true          # Whether to randomize gene order, Null means inherit from checkpoint model config
+    min_expressed_genes: 200      # Minimum number of expressed genes required per cell, Null means inherit from checkpoint model config
+    use_raw: "auto"                 # Whether to use .raw.X (True), .X (False), or auto-detect (auto/null), Null means inherit from checkpoint model config
+    remove_duplicate_genes: false  # Remove duplicate genes instead of raising
+    n_data_workers: 4              # Data workers used by data module config
 
   # === Dataloader ===
   batch_size: 8                # Batch size
   num_workers: 4               # DataLoader workers
-  use_oom_dataloader: false    # Use OOM-safe DataLoader
+  use_oom_dataloader: true     # Use OOM-safe DataLoader, so gene order and subset differs on per-access/per-epoch, but the batch would be mostly dataset/file-pure.
 
 
   # === Training Loop ===
@@ -51,8 +64,10 @@ train:
   min_lr_ratio: 0.18            # Minimum LR as fraction of initial, cap at 1e-5
 
   # === Loss Weights ===
-  gene_loss_weight: 1.0        # Weight for gene prediction loss
-  count_loss_weight: 1.0       # Weight for count prediction loss
+  loss_config:
+    _target_: transcriptformer.data.dataclasses.LossConfig
+    gene_id_loss_weight: 1.0    # Gene ID prediction loss weight
+    softplus_approx: true       # Use softplus approximation in loss path
 
   # === Assay Embedding Init ===
   init_default_source: unknown  # Default source for new assay tokens
@@ -67,7 +82,3 @@ train:
 
   # === Data Preprocessing ===
   shuffle_expressed_each_batch: false # Shuffle expressed genes per batch
-  clip_counts: 30.0            # Max count value (clip)
-  normalize_to_scale: 0.0      # Normalize counts to this scale (0 = no normalization)
-  use_raw: false               # Use AnnData.raw.X if available
-  remove_duplicate_genes: false # Remove duplicate genes

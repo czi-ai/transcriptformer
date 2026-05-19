@@ -99,6 +99,12 @@ class TestTrainCommand:
         args.expanded_assay_vocab = None
         args.obs_assay_col = "assay"
         args.gene_col_name = "ensembl_id"
+        args.filter_to_vocabs = True
+        args.filter_outliers = 0.0
+        args.sort_genes = False
+        args.randomize_genes = False
+        args.min_expressed_genes = 0
+        args.n_data_workers = 4
         args.batch_size = 2
         args.num_workers = 0
         args.max_epochs = 1
@@ -113,8 +119,8 @@ class TestTrainCommand:
         args.adam_eps = 1e-8
         args.warmup_ratio = 0.1
         args.min_lr_ratio = 0.1
-        args.gene_loss_weight = 1.0
-        args.count_loss_weight = 1.0
+        args.gene_id_loss_weight = 1.0
+        args.softplus_approx = True
         args.init_default_source = "unknown"
         args.assay_init_map = []
         args.freeze_transformer = False
@@ -145,6 +151,8 @@ class TestTrainCommand:
         assert call_args["checkpoint_dir"] == "/path/to/checkpoint"
         assert call_args["output_dir"] == "/path/to/output"
         assert call_args["train_files"] == ["/path/to/train.h5ad"]
+        assert call_args["data_config"]["gene_col_name"] == "ensembl_id"
+        assert call_args["loss_config"]["gene_id_loss_weight"] == 1.0
 
 
 class TestCLIParsers:

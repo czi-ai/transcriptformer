@@ -229,24 +229,24 @@ def _parse_init_map(items: list[str] | None) -> dict[str, str]:
 
 
 def _sanitize_data_config(base_data_cfg: dict, cfg: dict) -> DataConfig:
+    if "data_config" not in cfg or not isinstance(cfg["data_config"], dict):
+        raise ValueError("Missing required nested 'data_config' in training config")
+
     out = dict(base_data_cfg)
+    data_cfg = dict(cfg["data_config"])
+    data_cfg.pop("_target_", None)
+    # Only override base checkpoint data config when values are explicitly provided.
+    for key, value in data_cfg.items():
+        if value is not None:
+            out[key] = value
+
     out["aux_vocab_path"] = cfg["source_vocab_dir"]
     out["pin_memory"] = True
     out["aux_cols"] = cfg.get("obs_assay_col", "assay")
-    out["gene_col_name"] = cfg.get("gene_col_name", "ensembl_id")
-    out["clip_counts"] = cfg.get("clip_counts", 30.0)
-    out["filter_to_vocabs"] = True
-    out["filter_outliers"] = 0.0
     out["pad_zeros"] = True
-    out["normalize_to_scale"] = cfg.get("normalize_to_scale", 0.0)
-    out["n_data_workers"] = cfg.get("num_workers", 4)
-    out["sort_genes"] = False
-    out["randomize_genes"] = False
-    out["min_expressed_genes"] = 0
+    out["n_data_workers"] = int(out.get("n_data_workers", cfg.get("num_workers", 4)))
     out["gene_pad_token"] = out.get("gene_pad_token") or "[PAD]"
     out["aux_pad_token"] = out.get("aux_pad_token") or "unknown"
-    out["use_raw"] = bool(cfg.get("use_raw", False))
-    out["remove_duplicate_genes"] = bool(cfg.get("remove_duplicate_genes", False))
 
     out.pop("_target_", None)
     return DataConfig(**out)
@@ -258,10 +258,18 @@ def _sanitize_model_config(base_model_cfg: dict) -> ModelConfig:
     return ModelConfig(**cfg)
 
 
-def _sanitize_loss_config(base_loss_cfg: dict) -> LossConfig:
-    cfg = dict(base_loss_cfg)
-    cfg.pop("_target_", None)
-    return LossConfig(**cfg)
+def _sanitize_loss_config(base_loss_cfg: dict, cfg: dict) -> LossConfig:
+    out = dict(base_loss_cfg)
+    train_loss_cfg = cfg.get("loss_config", {})
+    if not isinstance(train_loss_cfg, dict):
+        raise ValueError("'loss_config' must be a nested mapping in training config")
+    train_loss_cfg = dict(train_loss_cfg)
+    train_loss_cfg.pop("_target_", None)
+    for key, value in train_loss_cfg.items():
+        if value is not None:
+            out[key] = value
+    out.pop("_target_", None)
+    return LossConfig(**out)
 
 
 def _parse_devices(devices: str | int):
@@ -308,8 +316,6 @@ class TranscriptformerTrainModule(pl.LightningModule):
         eps: float,
         warmup_ratio: float,
         min_lr_ratio: float,
-        gene_loss_weight: float,
-        count_loss_weight: float,
         shuffle_expressed_each_batch: bool,
     ):
         super().__init__()
@@ -321,8 +327,6 @@ class TranscriptformerTrainModule(pl.LightningModule):
         self.eps = eps
         self.warmup_ratio = warmup_ratio
         self.min_lr_ratio = min_lr_ratio
-        self.gene_loss_weight = gene_loss_weight
-        self.count_loss_weight = count_loss_weight
         self.shuffle_expressed_each_batch = shuffle_expressed_each_batch
 
     def _shared_step(self, batch: BatchData, stage: str) -> torch.Tensor:
@@ -340,7 +344,7 @@ class TranscriptformerTrainModule(pl.LightningModule):
                 mask=out["mask"],
             )
 
-        total = self.count_loss_weight * count_loss + self.gene_loss_weight * gene_loss
+        total = count_loss + self.model.loss_config.gene_id_loss_weight * gene_loss
         self.log(f"{stage}/total_loss", total, prog_bar=True, on_step=(stage == "train"), on_epoch=True)
         self.log(f"{stage}/count_loss", count_loss, on_step=False, on_epoch=True)
         self.log(f"{stage}/gene_loss", gene_loss, on_step=False, on_epoch=True)
@@ -382,29 +386,46 @@ class TranscriptformerTrainModule(pl.LightningModule):
         }
 
 
-def _build_dataset(files: list[str], cfg: dict, gene_vocab: dict, aux_vocab: dict, seq_len: int, is_train: bool):
+def _build_dataset(
+    files: list[str],
+    cfg: dict,
+    data_config: DataConfig,
+    gene_vocab: dict,
+    aux_vocab: dict,
+    seq_len: int,
+    is_train: bool,
+):
+    for file in files:
+        if not Path(file).exists():
+            raise FileNotFoundError(f"Dataset file not found: {file}")
+    
     kwargs = {
         "gene_vocab": gene_vocab,
         "aux_vocab": aux_vocab,
         "max_len": seq_len,
-        "normalize_to_scale": cfg.get("normalize_to_scale", 0.0),
-        "sort_genes": False,
-        "randomize_order": False,
+        "normalize_to_scale": data_config.normalize_to_scale,
+        "sort_genes": bool(data_config.sort_genes),
+        "randomize_order": bool(data_config.randomize_genes),
         "pad_zeros": True,
-        "gene_col_name": cfg.get("gene_col_name", "ensembl_id"),
-        "filter_to_vocab": True,
-        "clip_counts": cfg.get("clip_counts", 30.0),
-        "use_raw": bool(cfg.get("use_raw", False)),
-        "remove_duplicate_genes": bool(cfg.get("remove_duplicate_genes", False)),
+        "gene_col_name": data_config.gene_col_name,
+        "filter_to_vocab": bool(data_config.filter_to_vocabs),
+        "clip_counts": data_config.clip_counts,
+        "use_raw": data_config.use_raw,
+        "remove_duplicate_genes": bool(data_config.remove_duplicate_genes),
     }
 
     if cfg.get("use_oom_dataloader", False):
-        return AnnDatasetOOM(files_list=files, **kwargs)
+        return AnnDatasetOOM(
+            files_list=files,
+            filter_outliers=float(data_config.filter_outliers),
+            min_expressed_genes=int(data_config.min_expressed_genes),
+            **kwargs,
+        )
 
     return AnnDataset(
         files_list=files,
-        filter_outliers=0.0,
-        min_expressed_genes=0,
+        filter_outliers=float(data_config.filter_outliers),
+        min_expressed_genes=int(data_config.min_expressed_genes),
         seed=int(cfg.get("seed", 42)) + (0 if is_train else 17),
         inference=False,
         **kwargs,
@@ -424,6 +445,19 @@ def _save_plain_weights(lightning_ckpt_path: Path, output_model_path: Path) -> N
     state_dict = ckpt["state_dict"]
     cleaned = {k[len("model.") :]: v for k, v in state_dict.items() if k.startswith("model.")}
     torch.save(cleaned, output_model_path)
+
+
+def _save_dataset_filter_metadata(output_dir: Path, train_dataset, val_dataset=None) -> None:
+    summary = {
+        "train": getattr(train_dataset, "filter_metadata", None),
+        "val": getattr(val_dataset, "filter_metadata", None) if val_dataset is not None else None,
+    }
+    if summary["train"] is None and summary["val"] is None:
+        return
+
+    with (output_dir / "data_filtering_summary.json").open("w") as f:
+        json.dump(summary, f, indent=2)
+        f.write("\n")
 
 
 def _prepare_source_dirs(cfg: dict) -> tuple[Path, Path, Path]:
@@ -457,7 +491,7 @@ def run_train_from_dict(cfg: dict) -> dict:
 
     data_config = _sanitize_data_config(model_json["data_config"], cfg)
     model_config = _sanitize_model_config(model_json["model_config"])
-    loss_config = _sanitize_loss_config(model_json["loss_config"])
+    loss_config = _sanitize_loss_config(model_json["loss_config"], cfg)
 
     obs_assay_col = cfg.get("obs_assay_col", "assay")
     aux_vocab = open_vocabs(str(vocab_dir), cols_to_load=None)
@@ -520,6 +554,7 @@ def run_train_from_dict(cfg: dict) -> dict:
     train_dataset = _build_dataset(
         files=list(cfg["train_files"]),
         cfg=cfg,
+        data_config=data_config,
         gene_vocab=gene_vocab,
         aux_vocab=aux_vocab,
         seq_len=model_config.seq_len,
@@ -530,6 +565,7 @@ def run_train_from_dict(cfg: dict) -> dict:
         _build_dataset(
             files=val_files,
             cfg=cfg,
+            data_config=data_config,
             gene_vocab=gene_vocab,
             aux_vocab=aux_vocab,
             seq_len=model_config.seq_len,
@@ -569,14 +605,14 @@ def run_train_from_dict(cfg: dict) -> dict:
         eps=float(cfg.get("adam_eps", 1e-8)),
         warmup_ratio=float(cfg.get("warmup_ratio", 0.1)),
         min_lr_ratio=float(cfg.get("min_lr_ratio", 0.1)),
-        gene_loss_weight=float(cfg.get("gene_loss_weight", 1.0)),
-        count_loss_weight=float(cfg.get("count_loss_weight", 1.0)),
         shuffle_expressed_each_batch=bool(cfg.get("shuffle_expressed_each_batch", False)),
     )
 
 
     output_dir = Path(cfg["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    _save_dataset_filter_metadata(output_dir, train_dataset, val_dataset)
 
     # Save config and train_args BEFORE training loop
     out_config = dict(config_json)

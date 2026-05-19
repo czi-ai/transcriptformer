@@ -92,8 +92,6 @@ def test_train_smoke_forward_backward():
         eps=1e-8,
         warmup_ratio=0.1,
         min_lr_ratio=0.1,
-        gene_loss_weight=1.0,
-        count_loss_weight=1.0,
         shuffle_expressed_each_batch=False,
     )
 
