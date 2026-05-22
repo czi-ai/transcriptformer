@@ -345,9 +345,11 @@ class TranscriptformerTrainModule(pl.LightningModule):
             )
 
         total = count_loss + self.model.loss_config.gene_id_loss_weight * gene_loss
-        self.log(f"{stage}/total_loss", total, prog_bar=True, on_step=(stage == "train"), on_epoch=True)
-        self.log(f"{stage}/count_loss", count_loss, on_step=False, on_epoch=True)
-        self.log(f"{stage}/gene_loss", gene_loss, on_step=False, on_epoch=True)
+        # explict batch size for logging to avoid warning from nested batch dictionary 
+        bs = int(batch.gene_counts.shape[0])
+        self.log(f"{stage}/total_loss", total, prog_bar=True, on_step=(stage == "train"), on_epoch=True, batch_size=bs)
+        self.log(f"{stage}/count_loss", count_loss, on_step=False, on_epoch=True, batch_size=bs)
+        self.log(f"{stage}/gene_loss", gene_loss, on_step=False, on_epoch=True, batch_size=bs)
         return total
 
     def training_step(self, batch: BatchData, batch_idx: int) -> torch.Tensor:
@@ -635,9 +637,9 @@ def run_train_from_dict(cfg: dict) -> dict:
     save_last = bool(ckpt_cfg.get("save_last", True))
 
     monitor_metric = "val/total_loss" if val_loader is not None else "train/total_loss"
-    filename_template = "epoch{epoch:03d}-step{step:08d}-val{val/total_loss:.4f}"
+    filename_template = "epoch-{epoch:03d}-step-{step:08d}-val-{val/total_loss:.4f}"
     if val_loader is None:
-        filename_template = "epoch{epoch:03d}-step{step:08d}-train{train/total_loss:.4f}"
+        filename_template = "epoch-{epoch:03d}-step-{step:08d}-train-{train/total_loss:.4f}"
 
     callbacks: list[pl.Callback] = []
     ckpt_topk = None
@@ -652,6 +654,7 @@ def run_train_from_dict(cfg: dict) -> dict:
             mode="min",
             save_top_k=save_top_k,
             save_last=False,
+            auto_insert_metric_name=False, # avoid duplicate metric name and "=" sign
         )
         callbacks.append(ckpt_topk)
 
