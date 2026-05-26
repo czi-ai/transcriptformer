@@ -320,9 +320,19 @@ def setup_train_parser(subparsers):
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--max-epochs", type=int, default=5)
     parser.add_argument("--precision", default="16-mixed")
-    parser.add_argument("--devices", default="1")
+    parser.add_argument(
+        "--num-gpus",
+        type=int,
+        default=1,
+        help="Number of GPUs per node to use for training (1=single, -1=all available, >1=specific number)",
+    )
     parser.add_argument("--num-nodes", type=int, default=1)
-    parser.add_argument("--accelerator", default="auto")
+    parser.add_argument(
+        "--device",
+        default="auto",
+        choices=["auto", "cpu", "cuda", "mps"],
+        help="Preferred device policy for training",
+    )
 
     parser.add_argument("--lr", type=float, default=5.5e-5)
     parser.add_argument("--weight-decay", type=float, default=0.05)
@@ -339,6 +349,12 @@ def setup_train_parser(subparsers):
     parser.add_argument("--assay-init-map", action="append", default=[], help="new_assay=source_assay mapping")
 
     parser.add_argument("--freeze-transformer", action="store_true")
+    parser.add_argument(
+        "--unfreeze-last-n-transformer-blocks",
+        type=int,
+        default=0,
+        help="When --freeze-transformer is set, unfreeze only the last N encoder blocks (0 keeps full transformer frozen)",
+    )
     parser.add_argument("--freeze-gene-embeddings", action="store_true")
     parser.add_argument("--freeze-count-head", action="store_true")
     parser.add_argument("--freeze-gene-head", action="store_true")
@@ -350,6 +366,18 @@ def setup_train_parser(subparsers):
     parser.add_argument("--use-raw", action="store_true")
     parser.add_argument("--remove-duplicate-genes", action="store_true")
     parser.add_argument("--use-oom-dataloader", action="store_true")
+    parser.add_argument(
+        "--file-aware-batching",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Keep OOM batches mostly file-local; disable to fall back to Lightning DistributedSampler batching",
+    )
+    parser.add_argument(
+        "--oom-batches-per-file",
+        type=int,
+        default=1,
+        help="In OOM mode, number of consecutive batches to draw from one file before interleaving",
+    )
     parser.add_argument("--seed", type=int, default=42)
 
 
@@ -550,9 +578,9 @@ def run_train_cli(args):
         "num_workers": args.num_workers,
         "max_epochs": args.max_epochs,
         "precision": args.precision,
-        "devices": args.devices,
+        "device": args.device,
+        "num_gpus": args.num_gpus,
         "num_nodes": args.num_nodes,
-        "accelerator": args.accelerator,
         "lr": args.lr,
         "weight_decay": args.weight_decay,
         "adam_beta1": args.adam_beta1,
@@ -567,12 +595,15 @@ def run_train_cli(args):
         "init_default_source": args.init_default_source,
         "assay_init_map": args.assay_init_map,
         "freeze_transformer": args.freeze_transformer,
+        "unfreeze_last_n_transformer_blocks": args.unfreeze_last_n_transformer_blocks,
         "freeze_gene_embeddings": args.freeze_gene_embeddings,
         "freeze_count_head": args.freeze_count_head,
         "freeze_gene_head": args.freeze_gene_head,
         "train_aux_only": args.train_aux_only,
         "shuffle_expressed_each_batch": args.shuffle_expressed_each_batch,
         "use_oom_dataloader": args.use_oom_dataloader,
+        "enable_file_aware_batching": args.file_aware_batching,
+        "oom_batches_per_file": args.oom_batches_per_file,
         "seed": args.seed,
     }
 

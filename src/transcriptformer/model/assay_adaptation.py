@@ -90,6 +90,7 @@ def apply_freeze_policy(
     freeze_count_head: bool = False,
     freeze_gene_head: bool = False,
     train_aux_only: bool = False,
+    unfreeze_last_n_transformer_blocks: int = 0,
 ) -> None:
     """Apply parameter freezing policy in-place."""
 
@@ -104,6 +105,15 @@ def apply_freeze_policy(
     if freeze_transformer and hasattr(model, "transformer_encoder"):
         for param in model.transformer_encoder.parameters():
             param.requires_grad = False
+
+        # Optional adapter-style policy: keep the encoder mostly frozen,
+        # but allow updates in the last N transformer blocks.
+        n = max(0, int(unfreeze_last_n_transformer_blocks))
+        if n > 0 and hasattr(model.transformer_encoder, "encoder_layers"):
+            layers = model.transformer_encoder.encoder_layers
+            for layer in list(layers)[-n:]:
+                for param in layer.parameters():
+                    param.requires_grad = True
 
     if freeze_gene_embeddings and hasattr(model, "gene_embeddings"):
         for param in model.gene_embeddings.parameters():

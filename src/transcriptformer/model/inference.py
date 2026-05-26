@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 from transcriptformer.data.dataloader import AnnDataset, AnnDatasetOOM
 from transcriptformer.model.embedding_surgery import change_embedding_layer
 from transcriptformer.tokenizer.vocab import load_vocabs_and_embeddings
+from transcriptformer.utils.device import resolve_accelerator_and_devices, resolve_checkpoint_map_location
 from transcriptformer.utils.utils import stack_dict
 
 # Set float32 matmul precision for better performance with Tensor Cores
@@ -83,21 +84,8 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
         )
 
     logging.info("Loading model checkpoint")
-    # Determine target device for loading checkpoint
     device_preference = getattr(cfg.model.inference_config, "device", "auto")
-    if device_preference == "cpu":
-        map_location = "cpu"
-    elif device_preference == "cuda":
-        map_location = "cuda" if torch.cuda.is_available() else "cpu"
-    elif device_preference == "mps":
-        map_location = "mps" if torch.backends.mps.is_available() else "cpu"
-    else:  # auto
-        if torch.cuda.is_available():
-            map_location = "cuda"
-        elif torch.backends.mps.is_available():
-            map_location = "mps"
-        else:
-            map_location = "cpu"
+    map_location = resolve_checkpoint_map_location(device_preference)
 
     # Instead of loading full checkpoint, just load weights with proper device mapping
     state_dict = torch.load(cfg.model.inference_config.load_checkpoint, weights_only=True, map_location=map_location)
@@ -136,8 +124,9 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
         "remove_duplicate_genes": cfg.model.data_config.remove_duplicate_genes,
         "use_raw": cfg.model.data_config.use_raw,
     }
-    if getattr(cfg.model.inference_config, "use_oom_dataloader", False):
-        # Use OOM-safe map-style dataset
+    use_oom = bool(getattr(cfg.model.inference_config, "use_oom_dataloader", False))
+    can_use_oom = all(isinstance(file, str) for file in data_files)
+    if use_oom and can_use_oom:
         dataset = AnnDatasetOOM(
             data_files,
             gene_vocab,
@@ -155,6 +144,10 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
             remove_duplicate_genes=cfg.model.data_config.remove_duplicate_genes,
         )
     else:
+        if use_oom and not can_use_oom:
+            logging.warning(
+                "use_oom_dataloader=true with in-memory AnnData inputs; falling back to AnnDataset for compatibility"
+            )
         dataset = AnnDataset(data_files, **data_kwargs)
 
     # Create dataloader
@@ -167,71 +160,8 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
         collate_fn=dataset.collate_fn,
     )
 
-    # Determine device and accelerator based on user preference
-    device_preference = getattr(cfg.model.inference_config, "device", "auto")
     num_gpus = getattr(cfg.model.inference_config, "num_gpus", 1)
-
-    # Handle device preference
-    if device_preference == "cpu":
-        # Force CPU usage
-        accelerator = "cpu"
-        devices = 1
-        logging.info("Forcing CPU usage based on device preference")
-    elif device_preference == "cuda":
-        # Force CUDA usage
-        if not torch.cuda.is_available():
-            raise RuntimeError("CUDA requested but not available")
-        accelerator = "gpu"
-        if num_gpus == -1:
-            devices = torch.cuda.device_count()
-        elif num_gpus > 1:
-            available_gpus = torch.cuda.device_count()
-            if available_gpus < num_gpus:
-                logging.warning(
-                    f"Requested {num_gpus} CUDA devices but only {available_gpus} available. Using {available_gpus}."
-                )
-                devices = available_gpus
-            else:
-                devices = num_gpus
-        else:
-            devices = 1
-        logging.info(f"Forcing CUDA usage with {devices} device(s)")
-    elif device_preference == "mps":
-        # Force MPS usage (Apple Silicon)
-        if not torch.backends.mps.is_available():
-            raise RuntimeError("MPS requested but not available")
-        accelerator = "mps"
-        devices = 1  # MPS typically supports single device
-        logging.info("Forcing MPS usage for Apple Silicon")
-    else:  # device_preference == "auto"
-        # Auto-detect best available device (existing logic)
-        if num_gpus == -1:
-            # Use all available GPUs
-            devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
-            accelerator = (
-                "gpu" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
-            )
-        elif num_gpus > 1:
-            # Use specified number of GPUs
-            available_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
-            if available_gpus < num_gpus:
-                logging.warning(
-                    f"Requested {num_gpus} GPUs but only {available_gpus} available. Using {available_gpus} GPUs."
-                )
-                devices = available_gpus if available_gpus > 0 else 1
-                accelerator = "gpu" if available_gpus > 0 else ("mps" if torch.backends.mps.is_available() else "cpu")
-            else:
-                devices = num_gpus
-                accelerator = "gpu"
-        else:
-            # Use single GPU or CPU
-            devices = 1
-            if torch.cuda.is_available():
-                accelerator = "gpu"
-            elif torch.backends.mps.is_available():
-                accelerator = "mps"
-            else:
-                accelerator = "cpu"
+    accelerator, devices = resolve_accelerator_and_devices(device_preference, num_gpus)
 
     logging.info(f"Using {devices} device(s) with accelerator: {accelerator}")
 

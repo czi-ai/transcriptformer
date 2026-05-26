@@ -20,7 +20,8 @@ train:
   train_files: []              # List of training .h5ad files
   val_files: []                # List of validation .h5ad files
   expanded_assay_vocab: null   # Path to expanded assay vocab JSON (optional)
-  obs_assay_col: assay         # AnnData.obs column for assay tokens
+  obs_assay_col: assay         # Required AnnData.obs column used to create aux tokens for model forward
+  obs_keys: null               # Optional list of extra AnnData.obs fields to carry in batch.obs (metadata only), use `all` to include all obs columns. 
 
   data_config:
     _target_: transcriptformer.data.dataclasses.DataConfig
@@ -39,16 +40,18 @@ train:
   # === Dataloader ===
   batch_size: 8                # Batch size
   num_workers: 4               # DataLoader workers
-  use_oom_dataloader: true     # Use OOM-safe DataLoader, so gene order and subset differs on per-access/per-epoch, but the batch would be mostly dataset/file-pure.
+  use_oom_dataloader: true     # Use backed OOM dataset + file-aware batching (lower memory, mostly file-local batches)
+  enable_file_aware_batching: true # Training-only and DDP-safe: keeps file-local OOM batches; set false to use Lightning DistributedSampler path
+  oom_batches_per_file: 1      # In OOM mode, number of consecutive batches drawn from one file before interleaving
 
 
   # === Training Loop ===
-  # Recommended: Aim for a global batch size of 4–5 million tokens (examples * seq_len * devices * accumulate_grad_batches)
+  # Recommended: Aim for a global batch size of 4–5 million tokens (examples * seq_len * num_gpus * num_nodes * accumulate_grad_batches)
   max_epochs: 5                # Number of epochs
   precision: 16-mixed          # Precision (16-mixed, 32, bf16, etc.)
-  devices: 1                   # Number of devices (int or 'auto')
-  num_nodes: 1                 # Number of nodes (for DDP)
-  accelerator: auto            # Accelerator type ('auto', 'cpu', 'cuda')
+  device: auto                 # Preferred device policy ('auto', 'cpu', 'cuda', 'mps'), same resolution path as inference
+  num_gpus: 1                  # Requested GPU count (1, >1, or -1 for all available on each node)
+  num_nodes: 1                 # Number of nodes/machines (for DDP)
   log_every_n_steps: 10        # Logging frequency
   seed: 42                     # Random seed
   gradient_clip_val: 1.0       # Max norm for gradient clipping (improves stability)
@@ -75,7 +78,8 @@ train:
 
   # === Freezing & Training Policy ===
   freeze_transformer: false    # Freeze transformer encoder
-  freeze_gene_embeddings: false # Freeze gene embeddings
+  unfreeze_last_n_transformer_blocks: 0 # If freeze_transformer=true, unfreeze only the last N encoder blocks (0 keeps full encoder frozen)
+  freeze_gene_embeddings: true # Freeze gene embeddings, this is pretrained from protein ESM2.
   freeze_count_head: false     # Freeze count decoder
   freeze_gene_head: false      # Freeze gene decoder
   train_aux_only: false        # Train only aux (assay) embeddings

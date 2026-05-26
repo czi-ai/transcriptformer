@@ -17,7 +17,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 
 from transcriptformer.data.dataclasses import BatchData, DataConfig, LossConfig, ModelConfig
-from transcriptformer.data.dataloader import AnnDataset, AnnDatasetOOM
+from transcriptformer.data.dataloader import AnnDataset, AnnDatasetOOM, FileAwareBatchSampler
 from transcriptformer.model.assay_adaptation import (
     AssayInitConfig,
     apply_freeze_policy,
@@ -26,6 +26,7 @@ from transcriptformer.model.assay_adaptation import (
 )
 from transcriptformer.model.model import Transcriptformer
 from transcriptformer.tokenizer.vocab import construct_gene_embeddings, open_vocabs
+from transcriptformer.utils.device import resolve_accelerator_and_devices
 
 
 class LiveMetricsSummaryCallback(pl.Callback):
@@ -272,14 +273,6 @@ def _sanitize_loss_config(base_loss_cfg: dict, cfg: dict) -> LossConfig:
     return LossConfig(**out)
 
 
-def _parse_devices(devices: str | int):
-    if isinstance(devices, int):
-        return devices
-    if devices in {"auto", "-1"}:
-        return devices
-    return int(devices)
-
-
 def _shuffle_expressed_genes(batch: BatchData, pad_idx: int) -> BatchData:
     tokens = batch.gene_token_indices
     counts = batch.gene_counts
@@ -414,6 +407,8 @@ def _build_dataset(
         "clip_counts": data_config.clip_counts,
         "use_raw": data_config.use_raw,
         "remove_duplicate_genes": bool(data_config.remove_duplicate_genes),
+        # Optional passthrough obs columns retained in BatchData.obs for downstream hooks/debugging.
+        "obs_keys": cfg.get("obs_keys", None),
     }
 
     if cfg.get("use_oom_dataloader", False):
@@ -509,7 +504,7 @@ def run_train_from_dict(cfg: dict) -> dict:
     else:
         target_assay_vocab = source_assay_vocab
         assay_vocab_path_for_output = vocab_dir / "assay_vocab.json"
-
+    # Training aux tokenization updated with new assay vocab
     aux_vocab[obs_assay_col] = target_assay_vocab
 
     emb_files = [str(vocab_dir / file_name) for file_name in data_config.esm2_mappings]
@@ -549,6 +544,7 @@ def run_train_from_dict(cfg: dict) -> dict:
         freeze_count_head=bool(cfg.get("freeze_count_head", False)),
         freeze_gene_head=bool(cfg.get("freeze_gene_head", False)),
         train_aux_only=bool(cfg.get("train_aux_only", False)),
+        unfreeze_last_n_transformer_blocks=int(cfg.get("unfreeze_last_n_transformer_blocks", 0)),
     )
 
     trainable, total = count_trainable_parameters(base_model)
@@ -579,24 +575,57 @@ def run_train_from_dict(cfg: dict) -> dict:
 
     batch_size = int(cfg.get("batch_size", 8))
     num_workers = int(cfg.get("num_workers", 4))
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=not bool(cfg.get("use_oom_dataloader", False)),
-        num_workers=num_workers,
-        pin_memory=True,
-        collate_fn=train_dataset.collate_fn,
-    )
-    val_loader = None
-    if val_dataset is not None:
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=batch_size,
-            shuffle=False,
+    use_file_aware_batching = bool(cfg.get("enable_file_aware_batching", True))
+    use_custom_batch_sampler = isinstance(train_dataset, AnnDatasetOOM) and use_file_aware_batching
+    if use_custom_batch_sampler:
+        train_loader = DataLoader(
+            train_dataset,
+            batch_sampler=FileAwareBatchSampler(
+                train_dataset,
+                batch_size=batch_size,
+                shuffle=True,
+                batches_per_file=int(cfg.get("oom_batches_per_file", 1)),
+                seed=int(cfg.get("seed", 42)),
+            ),
             num_workers=num_workers,
             pin_memory=True,
-            collate_fn=val_dataset.collate_fn,
+            collate_fn=train_dataset.collate_fn,
         )
+    else:
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            # Keep shuffling enabled here; Lightning/DistributedSampler will own rank-aware shuffling in DDP.
+            shuffle=True,
+            num_workers=num_workers,
+            pin_memory=True,
+            collate_fn=train_dataset.collate_fn,
+        )
+    val_loader = None
+    if val_dataset is not None:
+        if isinstance(val_dataset, AnnDatasetOOM) and use_file_aware_batching:
+            val_loader = DataLoader(
+                val_dataset,
+                batch_sampler=FileAwareBatchSampler(
+                    val_dataset,
+                    batch_size=batch_size,
+                    shuffle=False,
+                    batches_per_file=1,
+                    seed=int(cfg.get("seed", 42)) + 17,
+                ),
+                num_workers=num_workers,
+                pin_memory=True,
+                collate_fn=val_dataset.collate_fn,
+            )
+        else:
+            val_loader = DataLoader(
+                val_dataset,
+                batch_size=batch_size,
+                shuffle=False,
+                num_workers=num_workers,
+                pin_memory=True,
+                collate_fn=val_dataset.collate_fn,
+            )
 
     lit_model = TranscriptformerTrainModule(
         model=base_model,
@@ -669,10 +698,11 @@ def run_train_from_dict(cfg: dict) -> dict:
         )
         callbacks.append(ckpt_last)
 
-    devices = _parse_devices(cfg.get("devices", "1"))
-    strategy = "auto"
-    if isinstance(devices, int) and devices > 1:
-        strategy = "ddp"
+    device_preference = cfg.get("device", cfg.get("accelerator", "auto"))
+    num_gpus = cfg.get("num_gpus", cfg.get("devices", 1))
+    accelerator, devices = resolve_accelerator_and_devices(device_preference, num_gpus)
+    num_nodes = int(cfg.get("num_nodes", 1))
+    strategy = "ddp" if (int(devices) > 1 or num_nodes > 1) else "auto"
 
     # Gradient accumulation and clipping
     grad_clip = float(cfg.get("gradient_clip_val", 1.0))
@@ -691,9 +721,9 @@ def run_train_from_dict(cfg: dict) -> dict:
     callbacks.append(live_metrics_cb)
 
     trainer = pl.Trainer(
-        accelerator=cfg.get("accelerator", "auto"),
+        accelerator=accelerator,
         devices=devices,
-        num_nodes=int(cfg.get("num_nodes", 1)),
+        num_nodes=num_nodes,
         precision=cfg.get("precision", "16-mixed"),
         max_epochs=int(cfg.get("max_epochs", 5)),
         log_every_n_steps=int(cfg.get("log_every_n_steps", 10)),
@@ -702,6 +732,7 @@ def run_train_from_dict(cfg: dict) -> dict:
         gradient_clip_val=grad_clip,
         accumulate_grad_batches=grad_accum,
         logger=csv_logger,
+        use_distributed_sampler=not use_custom_batch_sampler,
     )
 
     resume_mode = cfg.get("resume_mode", "weights")

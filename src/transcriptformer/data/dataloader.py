@@ -9,7 +9,7 @@ import scanpy as sc
 import torch
 from scipy.sparse import csc_matrix, csr_matrix
 from torch import tensor
-from torch.utils.data import Dataset
+from torch.utils.data import BatchSampler, Dataset
 
 from transcriptformer.data.dataclasses import BatchData
 from transcriptformer.tokenizer.tokenizer import (
@@ -714,36 +714,64 @@ class AnnDatasetOOM(Dataset):
     def __len__(self) -> int:
         return int(self._offsets[-1])
 
+    @property
+    def num_files(self) -> int:
+        return len(self._n_rows)
+
+    def file_num_rows(self, file_id: int) -> int:
+        return int(self._n_rows[file_id])
+
+    def file_offset(self, file_id: int) -> int:
+        return int(self._offsets[file_id])
+
     def _loc(self, idx: int) -> tuple[int, int]:
         file_id = int(np.searchsorted(self._offsets, idx, side="right") - 1)
         row = int(idx - self._offsets[file_id])
         return file_id, row
 
-    def __getitem__(self, idx: int) -> BatchData:
-        file_id, row = self._loc(idx)
-        actual_row = int(self._keep_rows_per_file[file_id][row])
-        adata = self._handles[file_id]
-        gene_names = self._gene_names_per_file[file_id]
-        filter_idx = self._filter_idx_per_file[file_id]
+    @staticmethod
+    def _ensure_2d_array(x_rows) -> np.ndarray:
+        if isinstance(x_rows, csr_matrix | csc_matrix):
+            arr = x_rows.toarray()
+        else:
+            arr = np.asarray(x_rows)
+        if arr.ndim == 1:
+            arr = arr.reshape(1, -1)
+        return arr
+
+    def _build_obs_dict(self, obs_rows) -> dict[str, np.ndarray] | None:
+        if self.obs_keys is None:
+            return None
+
+        obs_dict = {}
+        cols = list(obs_rows.columns) if "all" in self.obs_keys else list(self.obs_keys or [])
+        for col in cols:
+            obs_dict[col] = np.array(obs_rows[col].tolist())[:, None]
+        return obs_dict
+
+    def _build_batch_from_rows(self, file_id: int, rows: list[int]) -> BatchData:
+        actual_rows = self._keep_rows_per_file[file_id][np.asarray(rows, dtype=np.int64)]
+        actual_rows = np.asarray(actual_rows, dtype=np.int64)
 
         X = self._X_per_file[file_id]
-        # Some backed sparse implementations use __getitem__ returning 2D; ensure 1D
-        x_row = X[actual_row]
-        # Only convert to dense if the row is actually sparse
-        if isinstance(x_row, csr_matrix | csc_matrix):
-            x_row = x_row.toarray().ravel()
-        else:
-            x_row = np.asarray(x_row).ravel()
+        # Backed/h5ad row reads are typically better behaved (and often faster) with monotonic indices
+        sort_order = np.argsort(actual_rows, kind="stable")
+        sorted_rows = actual_rows[sort_order]
+        x_rows = self._ensure_2d_array(X[sorted_rows])
+        if x_rows.shape[0] > 1:
+            x_rows = x_rows[np.argsort(sort_order)]
+
+        filter_idx = self._filter_idx_per_file[file_id]
         if filter_idx is not None:
-            x_row = x_row[filter_idx]
+            x_rows = x_rows[:, filter_idx]
 
-        obs_row = adata.obs.iloc[actual_row : actual_row + 1]
+        adata = self._handles[file_id]
+        obs_rows = adata.obs.iloc[actual_rows]
+        gene_names = self._gene_names_per_file[file_id]
 
-        # Build a 1-row batch and reuse existing processing pipeline
-        x_batch = np.expand_dims(x_row, axis=0)
         batch = process_batch(
-            x_batch,
-            obs_row,
+            x_rows,
+            obs_rows,
             gene_names,
             self.gene_tokenizer,
             getattr(self, "aux_tokenizer", None),
@@ -758,20 +786,151 @@ class AnnDatasetOOM(Dataset):
             self.aux_vocab,
         )
 
-        # Convert to BatchData for collate_fn compatibility
-        obs_dict = None
-        if self.obs_keys is not None:
-            obs_dict = {}
-            cols = list(obs_row.columns) if "all" in self.obs_keys else list(self.obs_keys or [])
-            for col in cols:
-                obs_dict[col] = np.array(obs_row[col].tolist())[:, None]
-
         return BatchData(
-            gene_counts=batch["gene_counts"][0],
-            gene_token_indices=batch["gene_token_indices"][0],
+            gene_counts=batch["gene_counts"],
+            gene_token_indices=batch["gene_token_indices"],
             file_path=None,
-            aux_token_indices=(
-                batch.get("aux_token_indices")[0] if batch.get("aux_token_indices") is not None else None
-            ),
-            obs=obs_dict,
+            aux_token_indices=batch.get("aux_token_indices"),
+            obs=self._build_obs_dict(obs_rows),
         )
+
+    def __getitem__(self, idx: int) -> BatchData:
+        # Build a 1-row batch
+        file_id, row = self._loc(idx)
+        batch = self._build_batch_from_rows(file_id, [row])
+        return BatchData(
+            gene_counts=batch.gene_counts[0],
+            gene_token_indices=batch.gene_token_indices[0],
+            file_path=None,
+            aux_token_indices=(batch.aux_token_indices[0] if batch.aux_token_indices is not None else None),
+            obs=({col: value[0:1] for col, value in batch.obs.items()} if batch.obs is not None else None),
+        )
+
+    def __getitems__(self, indices: list[int]) -> BatchData | list[BatchData]:
+        # Build a multi-row batch if all indices are from the same file; otherwise fallback to individual retrieval
+        if not indices:
+            return []
+
+        locations = [self._loc(int(idx)) for idx in indices]
+        file_ids = {file_id for file_id, _ in locations}
+        if len(file_ids) != 1:
+            return [self[int(idx)] for idx in indices]
+
+        file_id = locations[0][0]
+        rows = [row for _, row in locations]
+        return self._build_batch_from_rows(file_id, rows)
+
+
+class FileAwareBatchSampler(BatchSampler):
+    """Yield file-local batches while interleaving files across an epoch."""
+
+    def __init__(
+        self,
+        dataset: AnnDatasetOOM,
+        batch_size: int,
+        shuffle: bool = True,
+        drop_last: bool = False,
+        batches_per_file: int = 1,
+        seed: int = 0,
+    ):
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+        if batches_per_file <= 0:
+            raise ValueError("batches_per_file must be positive")
+
+        self.dataset = dataset
+        self.batch_size = int(batch_size)
+        self.shuffle = bool(shuffle)
+        self.drop_last = bool(drop_last)
+        self.batches_per_file = int(batches_per_file)
+        self.seed = int(seed)
+        self._epoch = 0
+
+    def set_epoch(self, epoch: int) -> None:
+        self._epoch = int(epoch)
+
+    def _build_all_batches(self) -> list[list[int]]:
+        rng = random.Random(self.seed + self._epoch)
+        file_ids = list(range(self.dataset.num_files))
+        if self.shuffle:
+            rng.shuffle(file_ids)
+
+        # Validation-friendly path: deterministic, file-sequential traversal.
+        # This minimizes backed-file switching and is typically faster than interleaving.
+        if not self.shuffle:
+            all_batches: list[list[int]] = []
+            for file_id in file_ids:
+                local_rows = list(range(self.dataset.file_num_rows(file_id)))
+                offset = self.dataset.file_offset(file_id)
+                for start in range(0, len(local_rows), self.batch_size):
+                    batch_rows = local_rows[start : start + self.batch_size]
+                    if len(batch_rows) < self.batch_size and self.drop_last:
+                        continue
+                    all_batches.append([offset + row for row in batch_rows])
+            return all_batches
+
+        active_files: list[dict] = []
+        for file_id in file_ids:
+            local_rows = list(range(self.dataset.file_num_rows(file_id)))
+            if self.shuffle:
+                rng.shuffle(local_rows)
+
+            batches = []
+            offset = self.dataset.file_offset(file_id)
+            for start in range(0, len(local_rows), self.batch_size):
+                batch_rows = local_rows[start : start + self.batch_size]
+                if len(batch_rows) < self.batch_size and self.drop_last:
+                    continue
+                batches.append([offset + row for row in batch_rows])
+
+            if batches:
+                active_files.append({"batches": batches, "cursor": 0})
+
+        all_batches: list[list[int]] = []
+        while active_files:
+            round_order = list(range(len(active_files)))
+            if self.shuffle:
+                rng.shuffle(round_order)
+
+            next_active = []
+            for pos in round_order:
+                state = active_files[pos]
+                start = state["cursor"]
+                stop = min(start + self.batches_per_file, len(state["batches"]))
+                all_batches.extend(state["batches"][start:stop])
+                if stop < len(state["batches"]):
+                    state["cursor"] = stop
+                    next_active.append(state)
+            active_files = next_active
+
+        return all_batches
+
+    def _rank_batches(self, all_batches: list[list[int]]) -> list[list[int]]:
+        if not torch.distributed.is_available() or not torch.distributed.is_initialized():
+            return all_batches
+
+        world_size = torch.distributed.get_world_size()
+        rank = torch.distributed.get_rank()
+        if world_size <= 1 or not all_batches:
+            return all_batches
+
+        if self.drop_last:
+            total = len(all_batches) - (len(all_batches) % world_size)
+            all_batches = all_batches[:total]
+        else:
+            remainder = len(all_batches) % world_size
+            if remainder:
+                padding = world_size - remainder
+                all_batches = all_batches + all_batches[:padding]
+
+        return all_batches[rank::world_size]
+
+    def __iter__(self):
+        rank_batches = self._rank_batches(self._build_all_batches())
+        self._epoch += 1
+        yield from rank_batches
+
+    def __len__(self) -> int:
+        all_batches = self._build_all_batches()
+        rank_batches = self._rank_batches(all_batches)
+        return len(rank_batches)

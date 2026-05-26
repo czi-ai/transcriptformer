@@ -1,5 +1,6 @@
 """Tests for the TranscriptFormer CLI module."""
 
+import argparse
 import sys
 from unittest import mock
 
@@ -109,9 +110,9 @@ class TestTrainCommand:
         args.num_workers = 0
         args.max_epochs = 1
         args.precision = "32"
-        args.devices = "1"
+        args.device = "cpu"
+        args.num_gpus = 1
         args.num_nodes = 1
-        args.accelerator = "cpu"
         args.lr = 1e-4
         args.weight_decay = 0.0
         args.adam_beta1 = 0.9
@@ -124,6 +125,7 @@ class TestTrainCommand:
         args.init_default_source = "unknown"
         args.assay_init_map = []
         args.freeze_transformer = False
+        args.unfreeze_last_n_transformer_blocks = 0
         args.freeze_gene_embeddings = False
         args.freeze_count_head = False
         args.freeze_gene_head = False
@@ -134,6 +136,8 @@ class TestTrainCommand:
         args.use_raw = False
         args.remove_duplicate_genes = False
         args.use_oom_dataloader = False
+        args.file_aware_batching = True
+        args.oom_batches_per_file = 1
         args.seed = 42
 
         # Mock return value
@@ -152,6 +156,11 @@ class TestTrainCommand:
         assert call_args["output_dir"] == "/path/to/output"
         assert call_args["train_files"] == ["/path/to/train.h5ad"]
         assert call_args["data_config"]["gene_col_name"] == "ensembl_id"
+        assert call_args["device"] == "cpu"
+        assert call_args["num_gpus"] == 1
+        assert call_args["unfreeze_last_n_transformer_blocks"] == 0
+        assert call_args["enable_file_aware_batching"] is True
+        assert call_args["oom_batches_per_file"] == 1
         assert call_args["loss_config"]["gene_id_loss_weight"] == 1.0
 
 
@@ -219,4 +228,10 @@ class TestCLIParsers:
             action="append",
             required=True,
             help="Training .h5ad file (repeatable)",
+        )
+        parser.add_argument.assert_any_call(
+            "--file-aware-batching",
+            action=argparse.BooleanOptionalAction,
+            default=True,
+            help="Keep OOM batches mostly file-local; disable to fall back to Lightning DistributedSampler batching",
         )
