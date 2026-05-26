@@ -46,6 +46,10 @@ def build_expanded_assay_embedding_weight(
     _validate_vocab_indices(old_vocab)
     _validate_vocab_indices(new_vocab)
 
+    # Fast path: unchanged vocab mapping means weights can be reused as-is.
+    if old_vocab == new_vocab:
+        return old_weight.clone()
+
     if cfg is None:
         cfg = AssayInitConfig()
     if init_map is None:
