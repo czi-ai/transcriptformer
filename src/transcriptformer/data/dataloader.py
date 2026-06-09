@@ -251,6 +251,7 @@ def load_gene_features(
 
         gene_counts = Counter(gene_names)
         duplicates = {gene for gene, count in gene_counts.items() if count > 1}
+        dedup_col_indices = None
         if len(duplicates) > 0:
             if remove_duplicate_genes:
                 seen = set()
@@ -259,20 +260,25 @@ def load_gene_features(
                     if gene not in seen:
                         seen.add(gene)
                         unique_indices.append(i)
-                adata = adata[:, unique_indices].copy()
                 gene_names = gene_names[unique_indices]
                 logging.warning(
                     f"Removed {len(duplicates)} duplicate genes after removing version numbers. Kept first occurrence."
                 )
+                if adata.isbacked:
+                    # Cannot copy a backed AnnData object; return indices so the caller
+                    # can incorporate them into its column-index filter instead.
+                    dedup_col_indices = unique_indices
+                else:
+                    adata = adata[:, unique_indices].copy()
             else:
                 raise ValueError(
                     "Found duplicate genes after removing version numbers. "
                     "Remove duplicates or pass --remove-duplicate-genes."
                 )
 
-        return gene_names, True, adata
+        return gene_names, True, adata, dedup_col_indices
     except KeyError:
-        return None, False, adata
+        return None, False, adata, None
 
 
 def validate_gene_dimension(X: np.ndarray, gene_names: np.ndarray, gene_col_name: str):
@@ -394,7 +400,7 @@ class AnnDataset(Dataset):
             logging.error(f"Failed to load data from {file_path}")
             return None
 
-        gene_names, success, adata = load_gene_features(
+        gene_names, success, adata, _dedup_col_indices = load_gene_features(
             adata, self.gene_col_name, self.remove_duplicate_genes, use_raw=self.use_raw
         )
         if not success:
@@ -639,7 +645,7 @@ class AnnDatasetOOM(Dataset):
         for file in self.files_list:
             file_path = file if self.data_dir is None else os.path.join(self.data_dir, file)
             adata = anndata.read_h5ad(file_path, backed="r")
-            gene_names, success, adata = load_gene_features(
+            gene_names, success, adata, dedup_col_indices = load_gene_features(
                 adata, self.gene_col_name, self.remove_duplicate_genes, use_raw=self.use_raw
             )
             if not success:
@@ -648,16 +654,26 @@ class AnnDatasetOOM(Dataset):
             original_gene_count = int(len(gene_names))
             original_cell_count = int(adata.n_obs)
 
-            # Optional vocab filtering at token level
+            # Optional vocab filtering at token level.
+            # When dedup_col_indices is set (backed mode deduplication), those indices are
+            # into the *original* adata column space; vocab filtering indices are into the
+            # deduplicated gene_names list, so the two must be composed.
             filter_idx = None
             if self.filter_to_vocab:
-                filter_idx = [i for i, name in enumerate(gene_names) if name in self.gene_vocab]
-                gene_names = gene_names[filter_idx]
+                vocab_positions = [i for i, name in enumerate(gene_names) if name in self.gene_vocab]
+                if dedup_col_indices is not None:
+                    filter_idx = [dedup_col_indices[i] for i in vocab_positions]
+                else:
+                    filter_idx = vocab_positions
+                gene_names = gene_names[np.array(vocab_positions)]
                 logging.info(
                     f"Filtered {original_gene_count} genes to {len(gene_names)} genes in vocab for file {file_path}"
                 )
                 if len(gene_names) == 0:
                     raise ValueError(f"No genes remaining after filtering for file {file_path}")
+            elif dedup_col_indices is not None:
+                # No vocab filter but deduplication was deferred; use the dedup indices as filter_idx
+                filter_idx = dedup_col_indices
 
             X_layer = get_counts_layer(adata, self.use_raw)
             if self.filter_outliers > 0 or self.min_expressed_genes > 0:
