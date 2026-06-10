@@ -9,7 +9,7 @@ import scanpy as sc
 import torch
 from scipy.sparse import csc_matrix, csr_matrix
 from torch import tensor
-from torch.utils.data import Dataset
+from torch.utils.data import BatchSampler, Dataset
 
 from transcriptformer.data.dataclasses import BatchData
 from transcriptformer.tokenizer.tokenizer import (
@@ -251,6 +251,7 @@ def load_gene_features(
 
         gene_counts = Counter(gene_names)
         duplicates = {gene for gene, count in gene_counts.items() if count > 1}
+        dedup_col_indices = None
         if len(duplicates) > 0:
             if remove_duplicate_genes:
                 seen = set()
@@ -259,20 +260,25 @@ def load_gene_features(
                     if gene not in seen:
                         seen.add(gene)
                         unique_indices.append(i)
-                adata = adata[:, unique_indices].copy()
                 gene_names = gene_names[unique_indices]
                 logging.warning(
                     f"Removed {len(duplicates)} duplicate genes after removing version numbers. Kept first occurrence."
                 )
+                if adata.isbacked:
+                    # Cannot copy a backed AnnData object; return indices so the caller
+                    # can incorporate them into its column-index filter instead.
+                    dedup_col_indices = unique_indices
+                else:
+                    adata = adata[:, unique_indices].copy()
             else:
                 raise ValueError(
                     "Found duplicate genes after removing version numbers. "
                     "Remove duplicates or pass --remove-duplicate-genes."
                 )
 
-        return gene_names, True, adata
+        return gene_names, True, adata, dedup_col_indices
     except KeyError:
-        return None, False, adata
+        return None, False, adata, None
 
 
 def validate_gene_dimension(X: np.ndarray, gene_names: np.ndarray, gene_col_name: str):
@@ -281,6 +287,43 @@ def validate_gene_dimension(X: np.ndarray, gene_names: np.ndarray, gene_col_name
             f"Mismatch between expression matrix columns ({X.shape[1]}) and gene names length ({len(gene_names)}). "
             f"Ensure 'adata.var[{gene_col_name}]' exists and aligns with the matrix columns."
         )
+
+
+def compute_row_stats_chunked(
+    X_layer,
+    filter_idx: list[int] | None = None,
+    chunk_size: int = 1024,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute per-row expression sums and nonzero counts in chunks.
+
+    This avoids loading the full matrix into memory for backed AnnData layers.
+    """
+    n_rows = int(X_layer.shape[0])
+    expr_counts = np.zeros(n_rows, dtype=np.float64)
+    nnz_counts = np.zeros(n_rows, dtype=np.int32)
+
+    for start in range(0, n_rows, chunk_size):
+        end = min(start + chunk_size, n_rows)
+        block = X_layer[start:end]
+
+        if isinstance(block, csr_matrix | csc_matrix):
+            if filter_idx is not None:
+                block = block[:, filter_idx]
+            expr = np.asarray(block.sum(axis=1)).ravel()
+            nnz = np.asarray(block.getnnz(axis=1)).ravel()
+        else:
+            arr = np.asarray(block)
+            if arr.ndim == 1:
+                arr = arr.reshape(1, -1)
+            if filter_idx is not None:
+                arr = arr[:, filter_idx]
+            expr = arr.sum(axis=1)
+            nnz = (arr > 0).sum(axis=1)
+
+        expr_counts[start:end] = expr
+        nnz_counts[start:end] = nnz
+
+    return expr_counts, nnz_counts
 
 
 class AnnDataset(Dataset):
@@ -328,6 +371,7 @@ class AnnDataset(Dataset):
         self.obs_keys = obs_keys
         self.use_raw = use_raw
         self.remove_duplicate_genes = remove_duplicate_genes
+        self.filter_metadata: list[dict] = []
 
         self.gene_tokenizer = BatchGeneTokenizer(gene_vocab)
         if aux_vocab is not None:
@@ -356,7 +400,7 @@ class AnnDataset(Dataset):
             logging.error(f"Failed to load data from {file_path}")
             return None
 
-        gene_names, success, adata = load_gene_features(
+        gene_names, success, adata, _dedup_col_indices = load_gene_features(
             adata, self.gene_col_name, self.remove_duplicate_genes, use_raw=self.use_raw
         )
         if not success:
@@ -379,6 +423,9 @@ class AnnDataset(Dataset):
                 "If your data is normalized, consider using the original count matrix instead."
             )
 
+        original_gene_count = int(len(gene_names))
+        original_cell_count = int(X.shape[0])
+
         logging.info("Applying filters")
         vocab = self.gene_vocab
         X, obs, gene_names = apply_filters(
@@ -393,8 +440,37 @@ class AnnDataset(Dataset):
         )
 
         if X is None:
+            self.filter_metadata.append(
+                {
+                    "file": file_path,
+                    "original_genes": original_gene_count,
+                    "kept_genes": 0,
+                    "removed_genes": original_gene_count,
+                    "original_cells": original_cell_count,
+                    "kept_cells": 0,
+                    "removed_cells": original_cell_count,
+                    "filter_to_vocab": bool(self.filter_to_vocab),
+                    "filter_outliers": float(self.filter_outliers),
+                    "min_expressed_genes": int(self.min_expressed_genes),
+                }
+            )
             logging.warning(f"Data was filtered out completely for {file_path}")
             return None
+
+        self.filter_metadata.append(
+            {
+                "file": file_path,
+                "original_genes": original_gene_count,
+                "kept_genes": int(len(gene_names)),
+                "removed_genes": int(original_gene_count - len(gene_names)),
+                "original_cells": original_cell_count,
+                "kept_cells": int(X.shape[0]),
+                "removed_cells": int(original_cell_count - X.shape[0]),
+                "filter_to_vocab": bool(self.filter_to_vocab),
+                "filter_outliers": float(self.filter_outliers),
+                "min_expressed_genes": int(self.min_expressed_genes),
+            }
+        )
 
         logging.info("Processing data")
         batch = process_batch(
@@ -525,10 +601,13 @@ class AnnDatasetOOM(Dataset):
         pad_token: str = "[PAD]",
         gene_col_name: str = "ensembl_id",
         filter_to_vocab: bool = True,
+        filter_outliers: float = 0.0,
+        min_expressed_genes: int = 0,
         clip_counts: float = 1e10,
         obs_keys: list[str] | None = None,
         use_raw: bool | None = None,
         remove_duplicate_genes: bool = False,
+        stats_chunk_size: int = 1024,
     ):
         super().__init__()
         self.files_list = files_list
@@ -543,10 +622,14 @@ class AnnDatasetOOM(Dataset):
         self.pad_token = pad_token
         self.gene_col_name = gene_col_name
         self.filter_to_vocab = filter_to_vocab
+        self.filter_outliers = filter_outliers
+        self.min_expressed_genes = min_expressed_genes
         self.clip_counts = clip_counts
         self.obs_keys = obs_keys
         self.use_raw = use_raw
         self.remove_duplicate_genes = remove_duplicate_genes
+        self.stats_chunk_size = max(1, int(stats_chunk_size))
+        self.filter_metadata: list[dict] = []
 
         self.gene_tokenizer = BatchGeneTokenizer(gene_vocab)
         if aux_vocab is not None:
@@ -556,69 +639,155 @@ class AnnDatasetOOM(Dataset):
         self._handles: list[anndata.AnnData] = []
         self._gene_names_per_file: list[np.ndarray] = []
         self._filter_idx_per_file: list[list[int] | None] = []
+        self._keep_rows_per_file: list[np.ndarray] = []
         self._X_per_file: list = []
         self._n_rows: list[int] = []
         for file in self.files_list:
             file_path = file if self.data_dir is None else os.path.join(self.data_dir, file)
             adata = anndata.read_h5ad(file_path, backed="r")
-            gene_names, success, adata = load_gene_features(
+            gene_names, success, adata, dedup_col_indices = load_gene_features(
                 adata, self.gene_col_name, self.remove_duplicate_genes, use_raw=self.use_raw
             )
             if not success:
                 raise ValueError(f"Failed to load gene features from {file_path}")
-            # Optional vocab filtering at token level
+
+            original_gene_count = int(len(gene_names))
+            original_cell_count = int(adata.n_obs)
+
+            # Optional vocab filtering at token level.
+            # When dedup_col_indices is set (backed mode deduplication), those indices are
+            # into the *original* adata column space; vocab filtering indices are into the
+            # deduplicated gene_names list, so the two must be composed.
             filter_idx = None
             if self.filter_to_vocab:
-                original_gene_count = len(gene_names)
-                filter_idx = [i for i, name in enumerate(gene_names) if name in self.gene_vocab]
-                gene_names = gene_names[filter_idx]
+                vocab_positions = [i for i, name in enumerate(gene_names) if name in self.gene_vocab]
+                if dedup_col_indices is not None:
+                    filter_idx = [dedup_col_indices[i] for i in vocab_positions]
+                else:
+                    filter_idx = vocab_positions
+                gene_names = gene_names[np.array(vocab_positions)]
                 logging.info(
                     f"Filtered {original_gene_count} genes to {len(gene_names)} genes in vocab for file {file_path}"
                 )
                 if len(gene_names) == 0:
                     raise ValueError(f"No genes remaining after filtering for file {file_path}")
+            elif dedup_col_indices is not None:
+                # No vocab filter but deduplication was deferred; use the dedup indices as filter_idx
+                filter_idx = dedup_col_indices
+
+            X_layer = get_counts_layer(adata, self.use_raw)
+            if self.filter_outliers > 0 or self.min_expressed_genes > 0:
+                expr_counts, nnz_counts = compute_row_stats_chunked(
+                    X_layer,
+                    filter_idx=filter_idx,
+                    chunk_size=self.stats_chunk_size,
+                )
+
+                keep_mask = np.ones(original_cell_count, dtype=bool)
+                if self.filter_outliers > 0:
+                    count_std = np.std(expr_counts)
+                    count_mean = np.mean(expr_counts)
+                    keep_mask &= (expr_counts > count_mean - count_std * self.filter_outliers) & (
+                        expr_counts < count_mean + count_std * self.filter_outliers
+                    )
+                if self.min_expressed_genes > 0:
+                    keep_mask &= nnz_counts >= self.min_expressed_genes
+
+                keep_rows = np.nonzero(keep_mask)[0].astype(np.int64)
+
+                logging.info(
+                    f"Filtered {original_cell_count} cells to {len(keep_rows)} cells for file {file_path}"
+                )
+            else:
+                keep_rows = np.arange(original_cell_count, dtype=np.int64)
+            if keep_rows.size == 0:
+                raise ValueError(f"No cells remaining after filtering for file {file_path}")
 
             self._handles.append(adata)
             self._gene_names_per_file.append(gene_names)
             self._filter_idx_per_file.append(filter_idx)
-            X_layer = get_counts_layer(adata, self.use_raw)
+            self._keep_rows_per_file.append(keep_rows)
             self._X_per_file.append(X_layer)
-            self._n_rows.append(int(adata.n_obs))
+            self._n_rows.append(int(keep_rows.size))
+
+            self.filter_metadata.append(
+                {
+                    "file": file_path,
+                    "original_genes": original_gene_count,
+                    "kept_genes": int(len(gene_names)),
+                    "removed_genes": int(original_gene_count - len(gene_names)),
+                    "original_cells": original_cell_count,
+                    "kept_cells": int(keep_rows.size),
+                    "removed_cells": int(original_cell_count - keep_rows.size),
+                    "filter_to_vocab": bool(self.filter_to_vocab),
+                    "filter_outliers": float(self.filter_outliers),
+                    "min_expressed_genes": int(self.min_expressed_genes),
+                }
+            )
 
         self._offsets = np.cumsum([0] + self._n_rows)
 
     def __len__(self) -> int:
         return int(self._offsets[-1])
 
+    @property
+    def num_files(self) -> int:
+        return len(self._n_rows)
+
+    def file_num_rows(self, file_id: int) -> int:
+        return int(self._n_rows[file_id])
+
+    def file_offset(self, file_id: int) -> int:
+        return int(self._offsets[file_id])
+
     def _loc(self, idx: int) -> tuple[int, int]:
         file_id = int(np.searchsorted(self._offsets, idx, side="right") - 1)
         row = int(idx - self._offsets[file_id])
         return file_id, row
 
-    def __getitem__(self, idx: int) -> BatchData:
-        file_id, row = self._loc(idx)
-        adata = self._handles[file_id]
-        gene_names = self._gene_names_per_file[file_id]
-        filter_idx = self._filter_idx_per_file[file_id]
+    @staticmethod
+    def _ensure_2d_array(x_rows) -> np.ndarray:
+        if isinstance(x_rows, csr_matrix | csc_matrix):
+            arr = x_rows.toarray()
+        else:
+            arr = np.asarray(x_rows)
+        if arr.ndim == 1:
+            arr = arr.reshape(1, -1)
+        return arr
+
+    def _build_obs_dict(self, obs_rows) -> dict[str, np.ndarray] | None:
+        if self.obs_keys is None:
+            return None
+
+        obs_dict = {}
+        cols = list(obs_rows.columns) if "all" in self.obs_keys else list(self.obs_keys or [])
+        for col in cols:
+            obs_dict[col] = np.array(obs_rows[col].tolist())[:, None]
+        return obs_dict
+
+    def _build_batch_from_rows(self, file_id: int, rows: list[int]) -> BatchData:
+        actual_rows = self._keep_rows_per_file[file_id][np.asarray(rows, dtype=np.int64)]
+        actual_rows = np.asarray(actual_rows, dtype=np.int64)
 
         X = self._X_per_file[file_id]
-        # Some backed sparse implementations use __getitem__ returning 2D; ensure 1D
-        x_row = X[row]
-        # Only convert to dense if the row is actually sparse
-        if isinstance(x_row, csr_matrix | csc_matrix):
-            x_row = x_row.toarray().ravel()
-        else:
-            x_row = np.asarray(x_row).ravel()
+        # Backed/h5ad row reads are typically better behaved (and often faster) with monotonic indices
+        sort_order = np.argsort(actual_rows, kind="stable")
+        sorted_rows = actual_rows[sort_order]
+        x_rows = self._ensure_2d_array(X[sorted_rows])
+        if x_rows.shape[0] > 1:
+            x_rows = x_rows[np.argsort(sort_order)]
+
+        filter_idx = self._filter_idx_per_file[file_id]
         if filter_idx is not None:
-            x_row = x_row[filter_idx]
+            x_rows = x_rows[:, filter_idx]
 
-        obs_row = adata.obs.iloc[row : row + 1]
+        adata = self._handles[file_id]
+        obs_rows = adata.obs.iloc[actual_rows]
+        gene_names = self._gene_names_per_file[file_id]
 
-        # Build a 1-row batch and reuse existing processing pipeline
-        x_batch = np.expand_dims(x_row, axis=0)
         batch = process_batch(
-            x_batch,
-            obs_row,
+            x_rows,
+            obs_rows,
             gene_names,
             self.gene_tokenizer,
             getattr(self, "aux_tokenizer", None),
@@ -633,20 +802,151 @@ class AnnDatasetOOM(Dataset):
             self.aux_vocab,
         )
 
-        # Convert to BatchData for collate_fn compatibility
-        obs_dict = None
-        if self.obs_keys is not None:
-            obs_dict = {}
-            cols = list(obs_row.columns) if "all" in self.obs_keys else list(self.obs_keys or [])
-            for col in cols:
-                obs_dict[col] = np.array(obs_row[col].tolist())[:, None]
-
         return BatchData(
-            gene_counts=batch["gene_counts"][0],
-            gene_token_indices=batch["gene_token_indices"][0],
+            gene_counts=batch["gene_counts"],
+            gene_token_indices=batch["gene_token_indices"],
             file_path=None,
-            aux_token_indices=(
-                batch.get("aux_token_indices")[0] if batch.get("aux_token_indices") is not None else None
-            ),
-            obs=obs_dict,
+            aux_token_indices=batch.get("aux_token_indices"),
+            obs=self._build_obs_dict(obs_rows),
         )
+
+    def __getitem__(self, idx: int) -> BatchData:
+        # Build a 1-row batch
+        file_id, row = self._loc(idx)
+        batch = self._build_batch_from_rows(file_id, [row])
+        return BatchData(
+            gene_counts=batch.gene_counts[0],
+            gene_token_indices=batch.gene_token_indices[0],
+            file_path=None,
+            aux_token_indices=(batch.aux_token_indices[0] if batch.aux_token_indices is not None else None),
+            obs=({col: value[0:1] for col, value in batch.obs.items()} if batch.obs is not None else None),
+        )
+
+    def __getitems__(self, indices: list[int]) -> BatchData | list[BatchData]:
+        # Build a multi-row batch if all indices are from the same file; otherwise fallback to individual retrieval
+        if not indices:
+            return []
+
+        locations = [self._loc(int(idx)) for idx in indices]
+        file_ids = {file_id for file_id, _ in locations}
+        if len(file_ids) != 1:
+            return [self[int(idx)] for idx in indices]
+
+        file_id = locations[0][0]
+        rows = [row for _, row in locations]
+        return self._build_batch_from_rows(file_id, rows)
+
+
+class FileAwareBatchSampler(BatchSampler):
+    """Yield file-local batches while interleaving files across an epoch."""
+
+    def __init__(
+        self,
+        dataset: AnnDatasetOOM,
+        batch_size: int,
+        shuffle: bool = True,
+        drop_last: bool = False,
+        batches_per_file: int = 1,
+        seed: int = 0,
+    ):
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+        if batches_per_file <= 0:
+            raise ValueError("batches_per_file must be positive")
+
+        self.dataset = dataset
+        self.batch_size = int(batch_size)
+        self.shuffle = bool(shuffle)
+        self.drop_last = bool(drop_last)
+        self.batches_per_file = int(batches_per_file)
+        self.seed = int(seed)
+        self._epoch = 0
+
+    def set_epoch(self, epoch: int) -> None:
+        self._epoch = int(epoch)
+
+    def _build_all_batches(self) -> list[list[int]]:
+        rng = random.Random(self.seed + self._epoch)
+        file_ids = list(range(self.dataset.num_files))
+        if self.shuffle:
+            rng.shuffle(file_ids)
+
+        # Validation-friendly path: deterministic, file-sequential traversal.
+        # This minimizes backed-file switching and is typically faster than interleaving.
+        if not self.shuffle:
+            all_batches: list[list[int]] = []
+            for file_id in file_ids:
+                local_rows = list(range(self.dataset.file_num_rows(file_id)))
+                offset = self.dataset.file_offset(file_id)
+                for start in range(0, len(local_rows), self.batch_size):
+                    batch_rows = local_rows[start : start + self.batch_size]
+                    if len(batch_rows) < self.batch_size and self.drop_last:
+                        continue
+                    all_batches.append([offset + row for row in batch_rows])
+            return all_batches
+
+        active_files: list[dict] = []
+        for file_id in file_ids:
+            local_rows = list(range(self.dataset.file_num_rows(file_id)))
+            if self.shuffle:
+                rng.shuffle(local_rows)
+
+            batches = []
+            offset = self.dataset.file_offset(file_id)
+            for start in range(0, len(local_rows), self.batch_size):
+                batch_rows = local_rows[start : start + self.batch_size]
+                if len(batch_rows) < self.batch_size and self.drop_last:
+                    continue
+                batches.append([offset + row for row in batch_rows])
+
+            if batches:
+                active_files.append({"batches": batches, "cursor": 0})
+
+        all_batches: list[list[int]] = []
+        while active_files:
+            round_order = list(range(len(active_files)))
+            if self.shuffle:
+                rng.shuffle(round_order)
+
+            next_active = []
+            for pos in round_order:
+                state = active_files[pos]
+                start = state["cursor"]
+                stop = min(start + self.batches_per_file, len(state["batches"]))
+                all_batches.extend(state["batches"][start:stop])
+                if stop < len(state["batches"]):
+                    state["cursor"] = stop
+                    next_active.append(state)
+            active_files = next_active
+
+        return all_batches
+
+    def _rank_batches(self, all_batches: list[list[int]]) -> list[list[int]]:
+        if not torch.distributed.is_available() or not torch.distributed.is_initialized():
+            return all_batches
+
+        world_size = torch.distributed.get_world_size()
+        rank = torch.distributed.get_rank()
+        if world_size <= 1 or not all_batches:
+            return all_batches
+
+        if self.drop_last:
+            total = len(all_batches) - (len(all_batches) % world_size)
+            all_batches = all_batches[:total]
+        else:
+            remainder = len(all_batches) % world_size
+            if remainder:
+                padding = world_size - remainder
+                all_batches = all_batches + all_batches[:padding]
+
+        return all_batches[rank::world_size]
+
+    def __iter__(self):
+        rank_batches = self._rank_batches(self._build_all_batches())
+        self._epoch += 1
+        yield from rank_batches
+
+    def __len__(self) -> int:
+        all_batches = self._build_all_batches()
+        rank_batches = self._rank_batches(all_batches)
+        return len(rank_batches)

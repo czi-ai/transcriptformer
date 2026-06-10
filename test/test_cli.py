@@ -1,5 +1,6 @@
 """Tests for the TranscriptFormer CLI module."""
 
+import argparse
 import sys
 from unittest import mock
 
@@ -7,9 +8,9 @@ import pytest
 
 from transcriptformer.cli import (
     main,
-    run_download_cli,
-    setup_download_parser,
+    run_train_cli,
     setup_inference_parser,
+    setup_train_parser,
 )
 
 
@@ -18,13 +19,11 @@ class TestCLIMain:
 
     def test_main_no_args(self, monkeypatch, capsys):
         """Test CLI with no arguments prints help and exits."""
-        # Mock sys.argv and sys.exit
         monkeypatch.setattr(sys, "argv", ["transcriptformer"])
         with mock.patch("sys.exit") as mock_exit:
             main()
             mock_exit.assert_called_once_with(1)
 
-        # Check help was printed
         captured = capsys.readouterr()
         assert "usage: " in captured.out
         assert "TranscriptFormer command-line interface" in captured.out
@@ -63,42 +62,106 @@ class TestInferenceCommand:
         mock_run_inference.assert_called_once()
 
 
-class TestDownloadCommand:
-    """Tests for the download command."""
+class TestTrainCommand:
+    """Tests for the train command."""
 
-    @mock.patch("transcriptformer.cli.run_download_cli")
-    def test_download_command(self, mock_run_download, monkeypatch):
-        """Test that download command runs with required arguments."""
-        monkeypatch.setattr(sys, "argv", ["transcriptformer", "download", "tf-sapiens"])
+    @mock.patch("transcriptformer.cli.run_train_cli")
+    def test_train_command(self, mock_run_train, monkeypatch):
+        """Test that train command runs with required arguments."""
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "transcriptformer",
+                "train",
+                "--checkpoint-dir",
+                "/path/to/checkpoint",
+                "--output-dir",
+                "/path/to/output",
+                "--train-file",
+                "/path/to/train.h5ad",
+            ],
+        )
 
         main()
-        mock_run_download.assert_called_once()
+        mock_run_train.assert_called_once()
 
-    @mock.patch("transcriptformer.cli.download_artifacts.download_and_extract")
-    def test_run_download_cli_single_model(self, mock_download, monkeypatch):
-        """Test run_download_cli with a single model."""
+    @mock.patch("transcriptformer.cli.run_train_from_dict")
+    @mock.patch("transcriptformer.cli.setup_runtime_for_training")
+    def test_run_train_cli(self, mock_setup_runtime, mock_run_train_from_dict):
+        """Test run_train_cli parameter mapping."""
         args = mock.MagicMock()
-        args.model = "tf-sapiens"
-        args.checkpoint_dir = "./checkpoints"
+        args.checkpoint_dir = "/path/to/checkpoint"
+        args.resume_artifact_dir = None
+        args.resume_mode = "weights"
+        args.output_dir = "/path/to/output"
+        args.train_file = ["/path/to/train.h5ad"]
+        args.val_file = []
+        args.expanded_assay_vocab = None
+        args.obs_assay_col = "assay"
+        args.gene_col_name = "ensembl_id"
+        args.filter_to_vocabs = True
+        args.filter_outliers = 0.0
+        args.sort_genes = False
+        args.randomize_genes = False
+        args.min_expressed_genes = 0
+        args.n_data_workers = 4
+        args.batch_size = 2
+        args.num_workers = 0
+        args.max_epochs = 1
+        args.precision = "32"
+        args.device = "cpu"
+        args.num_gpus = 1
+        args.num_nodes = 1
+        args.lr = 1e-4
+        args.weight_decay = 0.0
+        args.adam_beta1 = 0.9
+        args.adam_beta2 = 0.95
+        args.adam_eps = 1e-8
+        args.warmup_ratio = 0.1
+        args.min_lr_ratio = 0.1
+        args.gene_id_loss_weight = 1.0
+        args.softplus_approx = True
+        args.init_default_source = "unknown"
+        args.assay_init_map = []
+        args.freeze_transformer = False
+        args.unfreeze_last_n_transformer_blocks = 0
+        args.freeze_gene_embeddings = False
+        args.freeze_count_head = False
+        args.freeze_gene_head = False
+        args.train_aux_only = False
+        args.shuffle_expressed_each_batch = False
+        args.clip_counts = 30.0
+        args.normalize_to_scale = 0.0
+        args.use_raw = False
+        args.remove_duplicate_genes = False
+        args.use_oom_dataloader = False
+        args.file_aware_batching = True
+        args.oom_batches_per_file = 1
+        args.seed = 42
 
-        run_download_cli(args)
-        mock_download.assert_called_once_with("tf_sapiens", "./checkpoints")
+        # Mock return value
+        mock_run_train_from_dict.return_value = {"output_dir": "/path/to/output"}
 
-    @mock.patch("transcriptformer.cli.download_artifacts.download_and_extract")
-    def test_run_download_cli_all_models(self, mock_download, monkeypatch):
-        """Test run_download_cli with 'all' option."""
-        args = mock.MagicMock()
-        args.model = "all"
-        args.checkpoint_dir = "./checkpoints"
+        # Call the function
+        run_train_cli(args)
 
-        run_download_cli(args)
-        assert mock_download.call_count == 4
-
-        # Check all models were downloaded
-        mock_download.assert_any_call("tf_sapiens", "./checkpoints")
-        mock_download.assert_any_call("tf_exemplar", "./checkpoints")
-        mock_download.assert_any_call("tf_metazoa", "./checkpoints")
-        mock_download.assert_any_call("all_embeddings", "./checkpoints")
+        # Verify setup was called
+        mock_setup_runtime.assert_called_once()
+        
+        # Verify run_train_from_dict was called with correct config
+        mock_run_train_from_dict.assert_called_once()
+        call_args = mock_run_train_from_dict.call_args[0][0]
+        assert call_args["checkpoint_dir"] == "/path/to/checkpoint"
+        assert call_args["output_dir"] == "/path/to/output"
+        assert call_args["train_files"] == ["/path/to/train.h5ad"]
+        assert call_args["data_config"]["gene_col_name"] == "ensembl_id"
+        assert call_args["device"] == "cpu"
+        assert call_args["num_gpus"] == 1
+        assert call_args["unfreeze_last_n_transformer_blocks"] == 0
+        assert call_args["enable_file_aware_batching"] is True
+        assert call_args["oom_batches_per_file"] == 1
+        assert call_args["loss_config"]["gene_id_loss_weight"] == 1.0
 
 
 class TestCLIParsers:
@@ -112,14 +175,12 @@ class TestCLIParsers:
 
         setup_inference_parser(subparsers)
 
-        # Check required arguments are added
         subparsers.add_parser.assert_called_once_with(
             "inference",
             help="Run inference with a TranscriptFormer model",
             description="Run inference with a TranscriptFormer model on scRNA-seq data.",
         )
 
-        # Check that required arguments are added with required=True
         parser.add_argument.assert_any_call(
             "--checkpoint-path",
             required=True,
@@ -131,7 +192,6 @@ class TestCLIParsers:
             help="Path to input AnnData file to run inference on",
         )
 
-        # Check that emb-type argument is added with correct choices
         parser.add_argument.assert_any_call(
             "--emb-type",
             default="cell",
@@ -139,30 +199,39 @@ class TestCLIParsers:
             help="Type of embeddings to extract: 'cell' for mean-pooled cell embeddings or 'cge' for contextual gene embeddings (default: cell)",
         )
 
-    def test_download_parser_setup(self):
-        """Test that download parser is set up correctly."""
+    def test_train_parser_setup(self):
+        """Test that train parser is set up correctly."""
         parser = mock.MagicMock()
         subparsers = mock.MagicMock()
         subparsers.add_parser.return_value = parser
 
-        setup_download_parser(subparsers)
+        setup_train_parser(subparsers)
 
-        # Check parser is created
         subparsers.add_parser.assert_called_once_with(
-            "download",
-            help="Download and extract TranscriptFormer model artifacts",
-            description="Download and extract TranscriptFormer model artifacts from a public S3 bucket.",
+            "train",
+            help="Train or continue training with expanded assay vocab",
+            description="Fine-tune TranscriptFormer with expanded assay tokens and optional freezing.",
         )
 
-        # Check that model argument is added with choices
         parser.add_argument.assert_any_call(
-            "model",
-            choices=[
-                "tf-sapiens",
-                "tf-exemplar",
-                "tf-metazoa",
-                "all",
-                "all-embeddings",
-            ],
-            help="Model to download ('all' for all models and embeddings, 'all-embeddings' for just embeddings)",
+            "--checkpoint-dir",
+            required=True,
+            help="Base artifact directory with config.json/model_weights.pt",
+        )
+        parser.add_argument.assert_any_call(
+            "--output-dir",
+            required=True,
+            help="Output artifact directory",
+        )
+        parser.add_argument.assert_any_call(
+            "--train-file",
+            action="append",
+            required=True,
+            help="Training .h5ad file (repeatable)",
+        )
+        parser.add_argument.assert_any_call(
+            "--file-aware-batching",
+            action=argparse.BooleanOptionalAction,
+            default=True,
+            help="Keep OOM batches mostly file-local; disable to fall back to Lightning DistributedSampler batching",
         )

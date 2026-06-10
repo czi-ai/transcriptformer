@@ -180,3 +180,10 @@ figures/
 # hydra
 .hydra/
 new_env/
+
+data/
+checkpoints/
+scripts/
+examples/
+outputs/
+conf/

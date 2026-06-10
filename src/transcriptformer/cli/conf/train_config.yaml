@@ -1,0 +1,88 @@
+defaults:
+  - _self_  # Load the current config file
+
+train:
+  # === Checkpointing & Output ===
+  checkpoint_dir: null         # Path to source checkpoint directory (required)
+  resume_artifact_dir: null    # Path to previous training output for resuming (optional)
+  resume_mode: weights         # 'weights' (load weights only) or 'lightning' (resume full state)
+  output_dir: ./train_outputs/tf_assay_expanded  # Output directory for new artifacts
+
+  checkpoint:
+    save_top_k: 1              # Number of best checkpoints to keep (by val/total_loss)
+    save_last: true            # Always save the last checkpoint
+
+  live_metrics:
+    enabled: true              # Export per-epoch summaries and live plots while training
+    every_n_epochs: 1          # Refresh metrics/plots every N epochs
+
+  # === Data ===
+  train_files: []              # List of training .h5ad files
+  val_files: []                # List of validation .h5ad files
+  expanded_assay_vocab: null   # Path to expanded assay vocab JSON (optional)
+  obs_assay_col: assay         # Required AnnData.obs column used to create aux tokens for model forward
+  obs_keys: null               # Optional list of extra AnnData.obs fields to carry in batch.obs (metadata only), use `all` to include all obs columns. 
+
+  data_config:
+    _target_: transcriptformer.data.dataclasses.DataConfig
+    gene_col_name: ensembl_id      # Column name in AnnData.var containing gene identifiers
+    clip_counts: 30.0              # Maximum count value (higher values will be clipped), Null means inherit from checkpoint model config
+    filter_to_vocabs: true         # Whether to filter genes to only those in the vocabulary, Null means inherit from checkpoint model config
+    filter_outliers: 3.0          # Standard deviation threshold for filtering outlier cells (0.0 = no filtering), Null means inherit from checkpoint model config
+    normalize_to_scale: 0.0        # Scale factor for count normalization (0 = no normalization)
+    sort_genes: null               # Whether to sort genes by expression level, Null means inherit from checkpoint model config
+    randomize_genes: true          # Whether to randomize gene order, Null means inherit from checkpoint model config
+    min_expressed_genes: 200      # Minimum number of expressed genes required per cell, Null means inherit from checkpoint model config
+    use_raw: "auto"                 # Whether to use .raw.X (True), .X (False), or auto-detect (auto/null), Null means inherit from checkpoint model config
+    remove_duplicate_genes: false  # Remove duplicate genes instead of raising
+    n_data_workers: 4              # Data workers used by data module config
+
+  # === Dataloader ===
+  batch_size: 8                # Batch size
+  num_workers: 4               # DataLoader workers
+  use_oom_dataloader: true     # Use backed OOM dataset + file-aware batching (lower memory, mostly file-local batches)
+  enable_file_aware_batching: true # Training-only and DDP-safe: keeps file-local OOM batches; set false to use Lightning DistributedSampler path
+  oom_batches_per_file: 1      # In OOM mode, number of consecutive batches drawn from one file before interleaving
+
+
+  # === Training Loop ===
+  # Recommended: Aim for a global batch size of 4–5 million tokens (examples * seq_len * num_gpus * num_nodes * accumulate_grad_batches)
+  max_epochs: 5                # Number of epochs
+  precision: 16-mixed          # Precision (16-mixed, 32, bf16, etc.)
+  device: auto                 # Preferred device policy ('auto', 'cpu', 'cuda', 'mps'), same resolution path as inference
+  num_gpus: 1                  # Requested GPU count (1, >1, or -1 for all available on each node)
+  num_nodes: 1                 # Number of nodes/machines (for DDP)
+  log_every_n_steps: 10        # Logging frequency
+  seed: 42                     # Random seed
+  gradient_clip_val: 1.0       # Max norm for gradient clipping (improves stability)
+  accumulate_grad_batches: 6   # Number of steps to accumulate gradients before optimizer step
+
+  # === Optimizer & Scheduler ===
+  lr: 5.5e-5                   # Learning rate, try 1.5e-4 if train from scratch
+  weight_decay: 0.05           # AdamW weight decay, try 0.1 if train from scratch
+  adam_beta1: 0.9              # AdamW beta1
+  adam_beta2: 0.95             # AdamW beta2
+  adam_eps: 1e-8               # AdamW epsilon
+  warmup_ratio: 0.1            # LR warmup ratio
+  min_lr_ratio: 0.18            # Minimum LR as fraction of initial, cap at 1e-5
+
+  # === Loss Weights ===
+  loss_config:
+    _target_: transcriptformer.data.dataclasses.LossConfig
+    gene_id_loss_weight: 1.0    # Gene ID prediction loss weight
+    softplus_approx: true       # Use softplus approximation in loss path
+
+  # === Assay Embedding Init ===
+  init_default_source: unknown  # Default source for new assay tokens
+  assay_init_map: []           # List of 'new=source' mappings
+
+  # === Freezing & Training Policy ===
+  freeze_transformer: false    # Freeze transformer encoder
+  unfreeze_last_n_transformer_blocks: 0 # If freeze_transformer=true, unfreeze only the last N encoder blocks (0 keeps full encoder frozen)
+  freeze_gene_embeddings: true # Freeze gene embeddings, this is pretrained from protein ESM2.
+  freeze_count_head: false     # Freeze count decoder
+  freeze_gene_head: false      # Freeze gene decoder
+  train_aux_only: false        # Train only aux (assay) embeddings
+
+  # === Data Preprocessing ===
+  shuffle_expressed_each_batch: false # Shuffle expressed genes per batch

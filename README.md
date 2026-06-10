@@ -65,7 +65,7 @@ uv pip install -e .
 ### Requirements
 
 Transcriptformer has the following core dependencies:
-- PyTorch (<=2.5.1, as 2.6.0+ may cause pickle errors)
+- PyTorch (>=2.5.1, <2.13) # original says PyTorch (<=2.5.1, as 2.6.0+ may cause pickle errors)
 - PyTorch Lightning
 - anndata
 - scanpy
