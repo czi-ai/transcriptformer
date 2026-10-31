@@ -292,6 +292,7 @@ transcriptformer download-data --help
 - `--embedding-layer-index INT`: Index of the transformer layer to extract embeddings from (-1 for last layer, default: -1). Use with `transcriptformer` model type.
 - `--model-type {transcriptformer,esm2ce}`: Type of model to use (default: `transcriptformer`). Use `esm2ce` to extract raw ESM2-CE gene embeddings.
 - `--emb-type {cell,cge}`: Type of embeddings to extract (default: `cell`). Use `cell` for mean-pooled cell embeddings or `cge` for contextual gene embeddings.
+- `--layers`: With `--emb-type cell`, layers to save mean-pooled cell embeddings for, as `all` or a comma-separated list such as `0,6,12` (default: `all`). `0` is the transformer input and `i` is the output of layer `i`.
 - `--num-gpus INT`: Number of GPUs to use for inference (default: 1). Use -1 for all available GPUs, or specify a specific number.
 - `--oom-dataloader`: Use the OOM-safe map-style DataLoader (uses backed reads and per-item densification; DistributedSampler-friendly).
 - `--n-data-workers INT`: Number of DataLoader workers per process (default: 0). Order is preserved with the map-style dataset and DistributedSampler.
@@ -345,7 +346,8 @@ No other data preprocessing is necessary - the model handles all required transf
 The inference results will be saved to the specified output directory (default: `./inference_results`) in a file named `embeddings.h5ad`. This is an AnnData object where:
 
 **For cell embeddings (`--emb-type cell`, default):**
-- Cell embeddings are stored in `obsm['embeddings']`
+- Cell embeddings (last layer) are stored in `obsm['embeddings']`
+- Per-layer cell embeddings are stored in `obsm['embeddings_layer{i}']` for each layer selected with `--layers` (`0` = transformer input)
 - Original cell metadata is preserved in the `obs` dataframe
 - Log-likelihood scores (if available) are stored in `uns['llh']`
 

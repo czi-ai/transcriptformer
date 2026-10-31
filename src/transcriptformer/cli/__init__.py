@@ -173,6 +173,12 @@ def setup_inference_parser(subparsers):
         help="Type of embeddings to extract: 'cell' for mean-pooled cell embeddings or 'cge' for contextual gene embeddings (default: cell)",
     )
     parser.add_argument(
+        "--layers",
+        default="all",
+        help="Layers to save mean-pooled cell embeddings for, as 'all' or a comma-separated list, e.g. '0,6,12'. "
+        "0 = transformer input, i = output of layer i; saved to obsm['embeddings_layer{i}'] (default: all)",
+    )
+    parser.add_argument(
         "--remove-duplicate-genes",
         action="store_true",
         default=False,
@@ -314,6 +320,7 @@ def run_inference_cli(args):
     cfg.model.inference_config.precision = args.precision
     cfg.model.model_type = args.model_type
     cfg.model.inference_config.emb_type = args.emb_type
+    cfg.model.inference_config.layers = None if args.layers == "all" else [int(i) for i in args.layers.split(",")]
     cfg.model.data_config.remove_duplicate_genes = args.remove_duplicate_genes
     cfg.model.data_config.use_raw = args.use_raw
     cfg.model.inference_config.num_gpus = args.num_gpus

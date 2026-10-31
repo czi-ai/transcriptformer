@@ -205,7 +205,7 @@ class TranscriptEncoder(nn.Module):
             ]
         )
 
-    def forward(self, x, score_mod, block_mask):
+    def forward(self, x, score_mod, block_mask, return_hidden=False):
         """
         Forward pass of the TranscriptEncoder.
 
@@ -213,14 +213,18 @@ class TranscriptEncoder(nn.Module):
             x (torch.Tensor): Input tensor of shape (batch_size, seq_len, embed_dim).
             score_mod (torch.Tensor): Score modifier tensor for attention.
             block_mask (torch.Tensor): Block mask tensor for attention.
+            return_hidden (bool): If True, return all hidden states instead of only the final output.
 
         Returns
         -------
-            torch.Tensor: Output tensor of shape (batch_size, seq_len, embed_dim).
+            torch.Tensor: Output tensor of shape (batch_size, seq_len, embed_dim), or if return_hidden,
+            a list of nlayers + 1 such tensors: [encoder input, output of layer 1, ..., output of layer nlayers].
         """
+        hidden_states = [x]
         for layer in self.encoder_layers:
             x = layer(x, score_mod=score_mod, block_mask=block_mask)
-        return x
+            hidden_states.append(x)
+        return hidden_states if return_hidden else x
 
 
 class MaskedSoftmax(nn.Module):

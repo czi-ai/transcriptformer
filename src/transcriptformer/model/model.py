@@ -313,11 +313,14 @@ class Transcriptformer(pl.LightningModule):
         score_mod = self._score_mod_factory(log_counts, emb_mode=embed)
 
         # Apply the transformer encoder
-        transformer_output = self.transformer_encoder(
+        # hidden_states[0] is the encoder input, hidden_states[i] the output of layer i
+        hidden_states = self.transformer_encoder(
             x=right_shifted_gene_embeddings,
             score_mod=score_mod,
             block_mask=block_mask,
+            return_hidden=True,
         )
+        transformer_output = hidden_states[-1]
 
         # Extract the auxiliary features from the output
         if aux_token_indices is not None:
@@ -344,6 +347,14 @@ class Transcriptformer(pl.LightningModule):
             else:
                 # Default: return mean-pooled cell embeddings
                 result["embeddings"] = mean_embeddings(gene_output, pad_mask).detach().cpu()
+                # Mean-pooled embeddings of the requested layers (0 = encoder input); aux tokens are dropped
+                for i in getattr(self.inference_config, "layers", None) or []:
+                    layer_gene_output = hidden_states[i][:, -gene_output.shape[1] :, :]
+                    result[f"embeddings_layer{i}"] = mean_embeddings(layer_gene_output, pad_mask).detach().cpu()
+
+            # Skip the count/gene-id prediction heads unless a likelihood output was requested
+            if not {"llh", "gene_llh"} & set(getattr(self.inference_config, "output_keys", None) or []):
+                return result
 
         # Append the end token to the gene_tokens
         result["input_gene_token_indices"] = torch.cat(

@@ -60,6 +60,15 @@ def run_inference(cfg, data_files: list[str] | list[anndata.AnnData]):
     else:
         raise ValueError(f"Unknown model_type: {model_type}")
 
+    # Resolve which layers' cell embeddings to save (None = all: 0 = encoder input, i = output of layer i)
+    # and add them to output_keys so they are saved to obsm as "embeddings_layer{i}"
+    ic = cfg.model.inference_config
+    if model_type == "transcriptformer" and ic.emb_type == "cell":
+        all_layers = list(range(cfg.model.model_config.num_layers + 1))
+        ic.layers = all_layers if ic.get("layers") is None else [all_layers[i] for i in ic.layers]
+        ic.output_keys = list(ic.output_keys) + [f"embeddings_layer{i}" for i in ic.layers]
+        logging.info(f"Saving cell embeddings for layers {ic.layers}")
+
     # Instantiate the selected model
     logging.info(f"Instantiating the {model_type} model")
     model = ModelClass(
