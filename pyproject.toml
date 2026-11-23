@@ -31,7 +31,7 @@ dependencies = [
   "scanpy==1.11.2",
   "scipy==1.15.3",
   "timeout-decorator==0.5",
-  "torch==2.5.1",
+  "torch==2.13.0",
 ]
 
 optional-dependencies.build = [
